@@ -1,5 +1,5 @@
 """
-Lotto 45 Add-on Main Application
+Lotto 45 Add-on Main Application v2.0
 Home Assistant Add-on for 동행복권 로또 6/45
 """
 
@@ -7,6 +7,7 @@ import os
 import asyncio
 import logging
 from typing import Optional
+from datetime import date, datetime
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
@@ -29,7 +30,7 @@ config = {
     "password": os.getenv("PASSWORD", ""),
     "enable_lotto645": os.getenv("ENABLE_LOTTO645", "true").lower() == "true",
     "update_interval": int(os.getenv("UPDATE_INTERVAL", "3600")),
-    "use_mqtt": os.getenv("USE_MQTT", "true").lower() == "true",
+    "use_mqtt": os.getenv("USE_MQTT", "false").lower() == "true",
     "ha_url": os.getenv("HA_URL", "http://supervisor/core"),
     "supervisor_token": os.getenv("SUPERVISOR_TOKEN", ""),
 }
@@ -37,6 +38,61 @@ config = {
 client: Optional[DhLotteryClient] = None
 lotto_645: Optional[DhLotto645] = None
 analyzer: Optional[DhLottoAnalyzer] = None
+
+
+# ============================================================================
+# 헬퍼 함수들 (컴포넌트 코드에서 가져옴)
+# ============================================================================
+
+def _safe_int(value) -> int:
+    """안전한 정수 변환"""
+    if value is None:
+        return 0
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        value = value.replace(",", "").strip()
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return 0
+
+
+def _format_with_commas(value) -> str:
+    """천 단위 콤마 포맷"""
+    n = _safe_int(value)
+    return f"{n:,}"
+
+
+def _parse_yyyymmdd(text: str) -> Optional[str]:
+    """YYYYMMDD -> YYYY-MM-DD 변환"""
+    if not text or not isinstance(text, str):
+        return None
+    text = text.strip()
+    if len(text) != 8:
+        return None
+    try:
+        year = int(text[0:4])
+        month = int(text[4:6])
+        day = int(text[6:8])
+        d = date(year, month, day)
+        return d.isoformat()
+    except ValueError:
+        return None
+
+
+def _get_lotto645_item(data: dict) -> dict:
+    """로또645 결과 데이터 추출"""
+    if not data:
+        return {}
+    # _raw가 있으면 우선 사용
+    if "_raw" in data:
+        return data["_raw"]
+    # data.list[0] 구조
+    items = data.get("list", [])
+    if items:
+        return items[0]
+    return data
 
 
 async def init_client():
@@ -48,7 +104,7 @@ async def init_client():
         return False
     
     try:
-        logger.info("Initializing DH Lottery client...")
+        logger.info("Initializing DH Lottery client v2.0...")
         client = DhLotteryClient(config["username"], config["password"])
         await client.async_login()
         
@@ -66,9 +122,9 @@ async def init_client():
 async def cleanup_client():
     """클라이언트 정리"""
     global client
-    if client and client.session:
+    if client:
         try:
-            await client.session.close()
+            await client.close()
             logger.info("Client session closed")
         except Exception as e:
             logger.error(f"Error closing client session: {e}")
@@ -78,7 +134,7 @@ async def cleanup_client():
 async def lifespan(app: FastAPI):
     """애플리케이션 라이프사이클 관리"""
     # Startup
-    logger.info("Starting Lotto 45 Add-on...")
+    logger.info("Starting Lotto 45 Add-on v2.0...")
     logger.info(f"Configuration: username={config['username']}, "
                 f"enable_lotto645={config['enable_lotto645']}, "
                 f"update_interval={config['update_interval']}")
@@ -107,7 +163,7 @@ async def lifespan(app: FastAPI):
 # FastAPI 앱
 app = FastAPI(
     title="Lotto 45",
-    version="0.2.0",
+    version="2.0.0",
     lifespan=lifespan
 )
 
@@ -130,7 +186,7 @@ async def background_tasks():
 
 
 async def update_sensors():
-    """센서 업데이트"""
+    """센서 업데이트 - 개선된 버전"""
     if not client or not client.logged_in:
         logger.warning("Client not logged in, attempting to login...")
         try:
@@ -142,54 +198,130 @@ async def update_sensors():
     try:
         logger.info("Updating sensors...")
         
-        # 예치금 조회
+        # 1. 예치금 조회
         balance = await client.async_get_balance()
-        await publish_sensor("lotto45_deposit", balance.deposit, {
+        
+        # 계정 관련 센서 (device_group: account)
+        await publish_sensor("lotto45_balance", balance.deposit, {
             "purchase_available": balance.purchase_available,
             "reservation_purchase": balance.reservation_purchase,
             "withdrawal_request": balance.withdrawal_request,
             "this_month_accumulated": balance.this_month_accumulated_purchase,
             "unit_of_measurement": "원",
-            "friendly_name": "로또45 예치금",
+            "friendly_name": "동행복권 잔액",
+            "icon": "mdi:wallet",
         })
         
-        # 통계 업데이트 (로또 활성화 시)
+        # 2. 로또 통계 업데이트 (로또 활성화 시)
         if config["enable_lotto645"] and analyzer:
-            # 번호 빈도
-            frequency = await analyzer.async_analyze_number_frequency(50)
-            top_num = frequency[0] if frequency else None
-            if top_num:
-                await publish_sensor("lotto45_top_frequency_number", top_num.number, {
-                    "count": top_num.count,
-                    "percentage": top_num.percentage,
-                    "unit_of_measurement": "회",
-                    "friendly_name": "로또45 최다 출현 번호",
+            # 로또 결과 조회
+            try:
+                latest_round_info = await lotto_645.async_get_round_info()
+                lotto_result = {
+                    "_raw": {
+                        "ltEpsd": latest_round_info.round_no,
+                        "tm1WnNo": latest_round_info.numbers[0],
+                        "tm2WnNo": latest_round_info.numbers[1],
+                        "tm3WnNo": latest_round_info.numbers[2],
+                        "tm4WnNo": latest_round_info.numbers[3],
+                        "tm5WnNo": latest_round_info.numbers[4],
+                        "tm6WnNo": latest_round_info.numbers[5],
+                        "bnsWnNo": latest_round_info.bonus_num,
+                        "ltRflYmd": latest_round_info.draw_date,
+                    }
+                }
+                
+                # 로또 결과 센서들 (device_group: lotto)
+                item = _get_lotto645_item(lotto_result)
+                
+                # 회차
+                await publish_sensor("lotto645_round", _safe_int(item.get("ltEpsd")), {
+                    "friendly_name": "로또6/45 회차",
+                    "icon": "mdi:counter",
                 })
+                
+                # 번호 1-6
+                for i in range(1, 7):
+                    await publish_sensor(f"lotto645_number{i}", _safe_int(item.get(f"tm{i}WnNo")), {
+                        "friendly_name": f"로또6/45 번호 {i}",
+                        "icon": f"mdi:numeric-{i}-circle",
+                    })
+                
+                # 보너스 번호
+                await publish_sensor("lotto645_bonus", _safe_int(item.get("bnsWnNo")), {
+                    "friendly_name": "로또6/45 보너스",
+                    "icon": "mdi:star-circle",
+                })
+                
+                # 추첨일
+                draw_date = _parse_yyyymmdd(item.get("ltRflYmd"))
+                if draw_date:
+                    await publish_sensor("lotto645_draw_date", draw_date, {
+                        "friendly_name": "로또6/45 추첨일",
+                        "icon": "mdi:calendar",
+                        "device_class": "date",
+                    })
+                
+            except Exception as e:
+                logger.warning(f"Failed to fetch lotto results: {e}")
+            
+            # 번호 빈도 분석
+            try:
+                frequency = await analyzer.async_analyze_number_frequency(50)
+                top_num = frequency[0] if frequency else None
+                if top_num:
+                    await publish_sensor("lotto45_top_frequency_number", top_num.number, {
+                        "count": top_num.count,
+                        "percentage": top_num.percentage,
+                        "unit_of_measurement": "회",
+                        "friendly_name": "로또45 최다 출현 번호",
+                        "icon": "mdi:star",
+                    })
+            except Exception as e:
+                logger.warning(f"Failed to analyze frequency: {e}")
             
             # Hot/Cold 번호
-            hot_cold = await analyzer.async_get_hot_cold_numbers(20)
-            await publish_sensor("lotto45_hot_numbers", 
-                ",".join(map(str, hot_cold.hot_numbers)), {
-                    "numbers": hot_cold.hot_numbers,
-                    "friendly_name": "로또45 Hot 번호",
-                })
-            await publish_sensor("lotto45_cold_numbers",
-                ",".join(map(str, hot_cold.cold_numbers)), {
-                    "numbers": hot_cold.cold_numbers,
-                    "friendly_name": "로또45 Cold 번호",
-                })
+            try:
+                hot_cold = await analyzer.async_get_hot_cold_numbers(20)
+                await publish_sensor("lotto45_hot_numbers", 
+                    ",".join(map(str, hot_cold.hot_numbers)), {
+                        "numbers": hot_cold.hot_numbers,
+                        "friendly_name": "로또45 Hot 번호",
+                        "icon": "mdi:fire",
+                    })
+                await publish_sensor("lotto45_cold_numbers",
+                    ",".join(map(str, hot_cold.cold_numbers)), {
+                        "numbers": hot_cold.cold_numbers,
+                        "friendly_name": "로또45 Cold 번호",
+                        "icon": "mdi:snowflake",
+                    })
+            except Exception as e:
+                logger.warning(f"Failed to get hot/cold numbers: {e}")
             
             # 구매 통계
-            stats = await analyzer.async_get_purchase_statistics(365)
-            await publish_sensor("lotto45_total_winning", stats.total_winning_amount, {
-                "total_purchase": stats.total_purchase_amount,
-                "total_purchase_count": stats.total_purchase_count,
-                "total_winning_count": stats.total_winning_count,
-                "win_rate": stats.win_rate,
-                "roi": stats.roi,
-                "unit_of_measurement": "원",
-                "friendly_name": "로또45 총 당첨금",
-            })
+            try:
+                stats = await analyzer.async_get_purchase_statistics(365)
+                await publish_sensor("lotto45_total_winning", stats.total_winning_amount, {
+                    "total_purchase": stats.total_purchase_amount,
+                    "total_purchase_count": stats.total_purchase_count,
+                    "total_winning_count": stats.total_winning_count,
+                    "win_rate": stats.win_rate,
+                    "roi": stats.roi,
+                    "rank_distribution": stats.rank_distribution,
+                    "unit_of_measurement": "원",
+                    "friendly_name": "로또45 총 당첨금",
+                    "icon": "mdi:trophy",
+                })
+            except Exception as e:
+                logger.warning(f"Failed to get purchase stats: {e}")
+        
+        # 업데이트 시간 기록
+        now = datetime.now().isoformat()
+        await publish_sensor("lotto45_last_update", now, {
+            "friendly_name": "최근 업데이트",
+            "device_class": "timestamp",
+            "icon": "mdi:clock-check-outline",
+        })
         
         logger.info("Sensors updated successfully")
         
@@ -237,18 +369,19 @@ async def root():
     <html>
         <head>
             <meta charset="UTF-8">
-            <title>Lotto 45</title>
+            <title>Lotto 45 v2.0</title>
             <style>
                 body {{ font-family: Arial, sans-serif; margin: 40px; }}
                 h1 {{ color: #333; }}
                 .status {{ font-size: 18px; margin: 20px 0; }}
                 .info {{ background: #f5f5f5; padding: 15px; border-radius: 5px; }}
+                .version {{ color: #666; font-size: 14px; }}
                 a {{ color: #0066cc; text-decoration: none; }}
                 a:hover {{ text-decoration: underline; }}
             </style>
         </head>
         <body>
-            <h1>동행복권 로또 45</h1>
+            <h1>동행복권 로또 45 <span class="version">v2.0</span></h1>
             <div class="status">
                 Status: {status_icon} {status_text}
             </div>
@@ -256,7 +389,15 @@ async def root():
                 <p><strong>Username:</strong> {config['username']}</p>
                 <p><strong>Update Interval:</strong> {config['update_interval']}s</p>
                 <p><strong>Lotto 645 Enabled:</strong> {config['enable_lotto645']}</p>
+                <p><strong>Version:</strong> 2.0.0 (개선된 로그인 & 센서)</p>
             </div>
+            <h2>Features v2.0</h2>
+            <ul>
+                <li>✅ 개선된 로그인 (RSA 암호화 + 세션 워밍업)</li>
+                <li>✅ User-Agent 로테이션 (차단 방지)</li>
+                <li>✅ Circuit Breaker (연속 실패 방지)</li>
+                <li>✅ 향상된 센서 정의</li>
+            </ul>
             <h2>Links</h2>
             <ul>
                 <li><a href="/docs">API Documentation</a></li>
@@ -276,6 +417,7 @@ async def health():
         "logged_in": client.logged_in if client else False,
         "username": config["username"],
         "lotto645_enabled": config["enable_lotto645"],
+        "version": "2.0.0",
     }
 
 
