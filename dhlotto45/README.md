@@ -1,6 +1,6 @@
 # DH Lotto 45
 
-Home Assistant용 동행복권 로또 6/45 통합 애드온
+Home Assistant 동행복권 로또 6/45 애드온 앱
 
 ## 기능
 
