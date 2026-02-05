@@ -227,21 +227,11 @@ async def execute_button_purchase(button_id: str):
         logger.info(f"[PURCHASE] Issue Date: {result.issue_dt}")
         logger.info(f"[PURCHASE] Games: {len(result.games)}")
         
-        # Send notification via sensor update
-        purchase_data = {
-            "round_no": result.round_no,
-            "barcode": result.barcode,
-            "issue_dt": result.issue_dt,
-            "games_count": len(result.games),
-            "games": [{"slot": g.slot, "numbers": g.numbers} for g in result.games],
-            "friendly_name": "Last Purchase",
-            "icon": "mdi:receipt",
-        }
+        # Format games for logging
+        for game in result.games:
+            logger.info(f"[PURCHASE]   Slot {game.slot}: {game.numbers} ({game.mode})")
         
-        logger.info(f"[PURCHASE] Publishing last purchase sensor...")
-        await publish_sensor("lotto45_last_purchase", datetime.now(timezone.utc).isoformat(), purchase_data)
-        
-        # Update sensors immediately after purchase
+        # Update all sensors immediately to reflect the purchase
         logger.info(f"[PURCHASE] Updating all sensors...")
         await update_sensors()
         
@@ -255,12 +245,12 @@ async def execute_button_purchase(button_id: str):
             "error": str(e),
             "button_id": button_id,
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "friendly_name": "Last Purchase Error",
+            "friendly_name": "Purchase Error",
             "icon": "mdi:alert-circle",
         }
         
         logger.info(f"[PURCHASE] Publishing error sensor...")
-        await publish_sensor("lotto45_last_purchase_error", str(e), error_data)
+        await publish_sensor("lotto45_purchase_error", str(e)[:255], error_data)
 
 
 async def init_client():
@@ -723,6 +713,58 @@ async def update_sensors():
                 })
             except Exception as e:
                 logger.warning(f"Failed to get purchase stats: {e}")
+            
+            # Purchase history (last week)
+            try:
+                logger.info("Fetching purchase history...")
+                history = await lotto_645.async_get_buy_history_this_week()
+                
+                if history:
+                    # Get the most recent purchase
+                    latest_purchase = history[0]
+                    
+                    # Format games for display
+                    games_info = []
+                    for game in latest_purchase.games:
+                        games_info.append({
+                            "slot": game.slot,
+                            "mode": str(game.mode),
+                            "numbers": game.numbers
+                        })
+                    
+                    # Publish latest purchase sensor
+                    await publish_sensor("lotto45_latest_purchase", latest_purchase.round_no, {
+                        "round_no": latest_purchase.round_no,
+                        "barcode": latest_purchase.barcode,
+                        "result": latest_purchase.result,
+                        "games": games_info,
+                        "games_count": len(latest_purchase.games),
+                        "friendly_name": "Latest Purchase",
+                        "icon": "mdi:receipt-text",
+                    })
+                    
+                    # Count pending (not yet drawn) purchases
+                    pending_count = 0
+                    for h in history:
+                        # Check for various "not drawn" status
+                        result_lower = str(h.result).lower()
+                        if "not" in result_lower or "drawn" not in result_lower:
+                            pending_count += 1
+                    
+                    # Publish purchase history count
+                    await publish_sensor("lotto45_purchase_history_count", len(history), {
+                        "total_games": sum(len(h.games) for h in history),
+                        "pending_count": pending_count,
+                        "friendly_name": "Purchase History Count",
+                        "icon": "mdi:counter",
+                    })
+                    
+                    logger.info(f"Purchase history updated: {len(history)} purchases found")
+                else:
+                    logger.info("No purchase history found")
+                    
+            except Exception as e:
+                logger.warning(f"Failed to get purchase history: {e}", exc_info=True)
         
         # Update time (with timezone)
         from datetime import timezone
