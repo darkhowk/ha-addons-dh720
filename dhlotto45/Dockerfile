@@ -23,10 +23,10 @@ RUN chmod a+x /run.sh
 
 # 헬스체크
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python3 -c "import requests; requests.get('http://localhost:8099/health', timeout=5)" || exit 1
+    CMD python3 -c "import requests; requests.get('http://localhost:60099/health', timeout=5)" || exit 1
 
 # 포트 노출
-EXPOSE 8099
+EXPOSE 60099
 
 # 실행
 CMD ["/run.sh"]
