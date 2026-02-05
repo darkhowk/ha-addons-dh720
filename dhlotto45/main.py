@@ -17,7 +17,6 @@ import uvicorn
 from dh_lottery_client import DhLotteryClient
 from dh_lotto_645 import DhLotto645
 from dh_lotto_645_ext import get_lotto645_winning_details
-from dh_lotto_720 import DhLotto720
 from dh_lotto_analyzer import DhLottoAnalyzer
 from mqtt_discovery import MQTTDiscovery, publish_sensor_mqtt
 
@@ -41,7 +40,6 @@ config = {
 
 client: Optional[DhLotteryClient] = None
 lotto_645: Optional[DhLotto645] = None
-lotto_720: Optional[DhLotto720] = None
 analyzer: Optional[DhLottoAnalyzer] = None
 mqtt_client: Optional[MQTTDiscovery] = None
 event_loop: Optional[asyncio.AbstractEventLoop] = None
@@ -293,7 +291,7 @@ async def execute_button_purchase(button_id: str):
 
 async def init_client():
     """Initialize client"""
-    global client, lotto_645, lotto_720, analyzer, mqtt_client
+    global client, lotto_645, analyzer, mqtt_client
     
     if not config["username"] or not config["password"]:
         logger.error("Username or password not configured")
@@ -306,7 +304,6 @@ async def init_client():
         
         if config["enable_lotto645"]:
             lotto_645 = DhLotto645(client)
-            lotto_720 = DhLotto720(client)
             analyzer = DhLottoAnalyzer(client)
         
         # Initialize MQTT if enabled
@@ -738,47 +735,6 @@ async def update_sensors():
             except Exception as e:
                 logger.warning(f"Failed to fetch lotto results: {e}")
             
-            # ========== NEW: Pension Lottery 720+ ==========
-            if lotto_720:
-                try:
-                    logger.info("Fetching pension lottery 720+ results...")
-                    pension_info = await lotto_720.async_get_round_info()
-                    
-                    # Pension lottery round
-                    await publish_sensor("lotto720_round", pension_info.round_no, {
-                        "friendly_name": "Pension Lottery Round",
-                        "icon": "mdi:counter",
-                    })
-                    
-                    # 1st prize winning number
-                    await publish_sensor("lotto720_first_number", pension_info.first_prize_number, {
-                        "friendly_name": "Pension Lottery 1st Number",
-                        "icon": "mdi:numeric",
-                    })
-                    
-                    # 1st prize amount (monthly pension)
-                    await publish_sensor("lotto720_first_prize", pension_info.first_prize_amount, {
-                        "friendly_name": "Pension Lottery 1st Prize",
-                        "unit_of_measurement": "ë§Œì›/ì›”",
-                        "icon": "mdi:cash",
-                        "note": "Monthly payment for 20 years",
-                    })
-                    
-                    # Draw date
-                    pension_draw_date = _parse_yyyymmdd(pension_info.draw_date)
-                    if pension_draw_date:
-                        await publish_sensor("lotto720_draw_date", pension_draw_date, {
-                            "friendly_name": "Pension Lottery Draw Date",
-                            "icon": "mdi:calendar",
-                            "device_class": "date",
-                        })
-                    
-                    logger.info(f"Pension lottery updated: Round={pension_info.round_no}, "
-                               f"Number={pension_info.first_prize_number}")
-                    
-                except Exception as e:
-                    logger.warning(f"Failed to fetch pension lottery results: {e}")
-                    logger.debug("Pension lottery API may require authentication or be temporarily unavailable")
             
             # Number frequency analysis
             try:
@@ -1313,112 +1269,6 @@ async def get_buy_history():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# ========== Pension Lottery 720+ Endpoints ==========
-
-@app.post("/pension/buy")
-async def buy_pension(count: int = 1):
-    """
-    Buy Pension Lottery 720+ tickets
-    
-    Args:
-        count: Number of tickets to purchase (1-5, default: 1)
-    
-    Returns:
-        Purchase result with round number, barcode, and ticket numbers
-    
-    Notes:
-        - Automatic number generation only
-        - Maximum 5 tickets per week
-        - Thursday 5 PM - 10 PM: Sales closed
-    
-    Example:
-        POST /pension/buy?count=3
-    """
-    if not lotto_720:
-        raise HTTPException(status_code=400, detail="Pension Lottery not enabled")
-    
-    if count < 1 or count > 5:
-        raise HTTPException(status_code=400, detail="Count must be between 1 and 5")
-    
-    try:
-        logger.info(f"Purchasing {count} pension lottery ticket(s)...")
-        result = await lotto_720.async_buy(count)
-        
-        response = {
-            "success": True,
-            "round_no": result.round_no,
-            "barcode": result.barcode,
-            "issue_dt": result.issue_dt,
-            "count": len(result.numbers),
-            "numbers": result.numbers,
-        }
-        
-        logger.info(f"Pension lottery purchase successful: Round {result.round_no}, "
-                   f"{len(result.numbers)} ticket(s)")
-        return response
-    
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Pension lottery purchase failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/pension/history")
-async def get_pension_history():
-    """
-    Get pension lottery purchase history from last week
-    
-    Returns:
-        Purchase history with ticket numbers and results
-    """
-    if not lotto_720:
-        raise HTTPException(status_code=400, detail="Pension Lottery not enabled")
-    
-    try:
-        history = await lotto_720.async_get_buy_history_this_week()
-        
-        results = []
-        for item in history:
-            results.append({
-                "round_no": item.round_no,
-                "barcode": item.barcode,
-                "result": item.result,
-                "numbers": item.numbers,
-            })
-        
-        return {
-            "count": len(results),
-            "items": results,
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/pension/info")
-async def get_pension_info():
-    """
-    Get current pension lottery round information
-    
-    Returns:
-        Current round number, winning number, and prize amount
-    """
-    if not lotto_720:
-        raise HTTPException(status_code=400, detail="Pension Lottery not enabled")
-    
-    try:
-        info = await lotto_720.async_get_round_info()
-        
-        return {
-            "round_no": info.round_no,
-            "draw_date": info.draw_date,
-            "first_prize_number": info.first_prize_number,
-            "first_prize_amount": info.first_prize_amount,
-            "bonus_number": info.bonus_number,
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":
