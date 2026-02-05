@@ -112,7 +112,7 @@ class MQTTDiscovery:
                 "name": f"DH Lottery Add-on ({username})",
                 "manufacturer": "DH Lottery",
                 "model": "Add-on",
-                "sw_version": "2.0.0",
+                "sw_version": "0.4.9",
             },
         }
         
@@ -239,7 +239,7 @@ class MQTTDiscovery:
                 "name": f"DH Lottery Add-on ({username})",
                 "manufacturer": "DH Lottery",
                 "model": "Add-on",
-                "sw_version": "2.0.0",
+                "sw_version": "0.4.9",
             },
         }
         

@@ -1,6 +1,7 @@
 """
-Lotto 45 Add-on Main Application v2.0
+Lotto 45 Add-on Main Application v2.1
 Home Assistant Add-on for DH Lottery 6/45
+v0.4.9 - MQTT Discovery + Button Support
 """
 
 import os
@@ -233,7 +234,7 @@ async def init_client():
         return False
     
     try:
-        logger.info("Initializing DH Lottery client v2.0...")
+        logger.info("Initializing DH Lottery client v2.1...")
         client = DhLotteryClient(config["username"], config["password"])
         await client.async_login()
         
@@ -302,7 +303,7 @@ async def cleanup_client():
 async def lifespan(app: FastAPI):
     """Application lifecycle manager"""
     # Startup
-    logger.info("Starting Lotto 45 Add-on v2.0...")
+    logger.info("Starting Lotto 45 Add-on v2.1...")
     logger.info(f"Configuration: username={config['username']}, "
                 f"enable_lotto645={config['enable_lotto645']}, "
                 f"update_interval={config['update_interval']}")
@@ -331,7 +332,7 @@ async def lifespan(app: FastAPI):
 # FastAPI app
 app = FastAPI(
     title="Lotto 45",
-    version="2.0.0",
+    version="2.1.0",
     lifespan=lifespan
 )
 
@@ -814,7 +815,8 @@ async def health():
         "logged_in": client.logged_in if client else False,
         "username": config["username"],
         "lotto645_enabled": config["enable_lotto645"],
-        "version": "2.0.0",
+        "mqtt_enabled": config["use_mqtt"],
+        "version": "2.1.0 (0.4.9)",
     }
 
 

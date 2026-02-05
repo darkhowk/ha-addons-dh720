@@ -1,8 +1,8 @@
 {
   "name": "DH Lotto 45",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "slug": "dhlotto45",
-  "description": "동행복권 로또 6/45 통합 애드온 (MQTT Discovery 지원)",
+  "description": "동행복권 로또 6/45 통합 애드온 (MQTT Discovery + 구매 버튼 지원)",
   "url": "https://github.com/redchupa/ha-addons-dhlottery",
   "arch": ["amd64", "armv7", "aarch64"],
   "build_from": {
@@ -18,7 +18,7 @@
     "password": "",
     "enable_lotto645": true,
     "update_interval": 3600,
-    "use_mqtt": false,
+    "use_mqtt": true,
     "mqtt_broker": "homeassistant.local",
     "mqtt_port": 1883,
     "mqtt_username": "",

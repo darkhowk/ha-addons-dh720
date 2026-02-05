@@ -1,5 +1,46 @@
 # 변경 이력
 
+## [0.4.9] - 2026-02-05
+
+### 🆕 추가
+- **버튼 엔티티 추가** (MQTT 모드)
+  - `button.dhlottery_addon_[USERNAME]_buy_auto_1`: 1게임 자동 구매
+  - `button.dhlottery_addon_[USERNAME]_buy_auto_5`: 5게임 자동 구매
+  - MQTT Discovery를 통한 버튼 등록
+  - MQTT 명령 구독 및 처리
+  
+- **구매 후 센서 자동 업데이트**
+  - 버튼으로 구매 시 즉시 센서 업데이트
+  - 구매 내역 센서 추가: `sensor.lotto45_last_purchase`
+  - 에러 센서 추가: `sensor.lotto45_last_purchase_error`
+
+### 🔧 변경
+- **use_mqtt 기본값 변경**: `false` → `true`
+  - 신규 사용자는 MQTT 모드가 기본값
+  - unique_id 지원으로 UI에서 엔티티 수정 가능
+  
+- **로그 시스템 개선**
+  - 이모지 아이콘 추가 (✅ ❌ 🎯 📡 등)
+  - 버튼 등록 과정 상세 로그
+  - MQTT 명령 수신 로그
+  - 구매 실행 로그
+
+### 🐛 수정
+- **버튼 생성 로직 수정**
+  - Slot 생성 방법 개선
+  - entity_id 파싱 로직 강화
+  - 비동기 처리 안정화
+
+### 📚 문서
+- **FAQ.md 추가**: 자주 묻는 질문 12가지
+  - Q1: 버튼 센서 생성 문제
+  - Q2: 버튼 구매 실행 문제
+  - Q3~Q12: 기타 문제 해결
+
+### 🔍 명확화
+- MQTT 모드 권장 (unique_id + 버튼 지원)
+- REST API 모드는 센서만 제공 (버튼 없음)
+
 ## [0.4.8] - 2026-02-05
 
 ### 🐛 수정

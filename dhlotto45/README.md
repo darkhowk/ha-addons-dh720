@@ -2,6 +2,26 @@
 
 Home Assistant 동행복권 로또 6/45 애드온
 
+## 🆕 버전 0.4.9 변경사항
+
+### 버튼 엔티티 추가! 🎯
+- ✅ MQTT 모드에서 구매 버튼 2개 자동 생성
+- ✅ 1게임 자동 구매 버튼
+- ✅ 5게임 자동 구매 버튼 (주간 최대)
+- ✅ 구매 후 센서 자동 업데이트
+
+### MQTT가 이제 기본값입니다
+- ✅ `use_mqtt: true`가 기본 설정
+- ✅ unique_id 지원으로 UI에서 수정 가능
+- ✅ 버튼 엔티티 지원
+
+### 사용 방법
+```yaml
+# 최소 설정 (MQTT 기본 활성화)
+username: "your_id"
+password: "your_password"
+```
+
 ## 🆕 버전 0.4.7 변경사항
 
 ### MQTT Discovery 지원 (unique_id 추가!)
@@ -76,16 +96,16 @@ Home Assistant 동행복권 로또 6/45 애드온
 
 ### 설정 예시
 
-#### REST API 모드 (기본)
+#### 기본 설정 (MQTT 모드 - 권장 ⭐)
 ```yaml
 username: "your_id"
 password: "your_password"
 enable_lotto645: true
 update_interval: 3600
-use_mqtt: false
+# use_mqtt는 기본값 true이므로 생략 가능
 ```
 
-#### MQTT Discovery 모드 (권장)
+#### MQTT 모드 명시적 설정
 ```yaml
 username: "your_id"
 password: "your_password"
@@ -96,7 +116,16 @@ mqtt_broker: "homeassistant.local"
 mqtt_port: 1883
 ```
 
-## 생성되는 센서
+#### REST API 모드 (버튼 없음)
+```yaml
+username: "your_id"
+password: "your_password"
+enable_lotto645: true
+update_interval: 3600
+use_mqtt: false
+```
+
+## 생성되는 센서 및 버튼
 
 ### REST API 모드
 애드온 시작 후 다음 센서들이 생성됩니다:
@@ -111,11 +140,14 @@ mqtt_port: 1883
 - **sensor.addon_[USERNAME]_lotto645_draw_date**: 추첨일
 
 ⚠️ **주의**: REST API 모드에서는 unique_id가 없어 UI에서 엔티티 이름 변경 불가
+⚠️ **버튼 없음**: REST API 모드에서는 버튼 엔티티 생성 안 됨
 
-### MQTT Discovery 모드 (권장)
-디바이스로 그룹화된 센서들이 생성됩니다:
+### MQTT Discovery 모드 (권장 ⭐)
+디바이스로 그룹화된 센서와 버튼이 생성됩니다:
 
 **디바이스**: DH Lottery Add-on ([USERNAME])
+
+**센서** (10개):
 - **sensor.dhlottery_addon_[USERNAME]_lotto45_balance**: 예치금 정보
 - **sensor.dhlottery_addon_[USERNAME]_lotto45_top_frequency_number**: 최다 출현 번호
 - **sensor.dhlottery_addon_[USERNAME]_lotto45_hot_numbers**: Hot 번호
@@ -126,10 +158,15 @@ mqtt_port: 1883
 - **sensor.dhlottery_addon_[USERNAME]_lotto645_bonus**: 보너스 번호
 - **sensor.dhlottery_addon_[USERNAME]_lotto645_draw_date**: 추첨일
 
+**버튼** (2개) 🆕:
+- **button.dhlottery_addon_[USERNAME]_buy_auto_1**: 1게임 자동 구매
+- **button.dhlottery_addon_[USERNAME]_buy_auto_5**: 5게임 자동 구매 (주간 최대)
+
 ✅ **장점**: 
 - unique_id 있음 (UI에서 자유롭게 수정 가능)
 - 디바이스로 그룹화되어 관리 편리
 - 통합구성요소와 충돌 없음
+- 버튼으로 간편하게 구매 가능
 
 ## 사용법
 
@@ -187,6 +224,31 @@ automation:
           message: "{{ states('sensor.dhlottery_addon_ng410808_lotto45_hot_numbers') }}"
 ```
 
+**매주 토요일 자동 구매:** 🆕
+```yaml
+automation:
+  - alias: "매주 토요일 로또 자동 구매"
+    trigger:
+      - platform: time
+        at: "19:00:00"
+    condition:
+      - condition: time
+        weekday:
+          - sat
+      - condition: numeric_state
+        entity_id: sensor.dhlottery_addon_ng410808_lotto45_balance
+        attribute: purchase_available
+        above: 5000
+    action:
+      - service: button.press
+        target:
+          entity_id: button.dhlottery_addon_ng410808_buy_auto_1
+      - service: notify.mobile_app
+        data:
+          title: "로또 구매 완료"
+          message: "자동 1게임 구매가 완료되었습니다."
+```
+
 ## 문제 해결
 
 ### MQTT 연결 실패
@@ -234,11 +296,14 @@ automation:
 - ✅ 간편한 설치 (애드온 스토어)
 - ✅ Web UI & API 제공
 - ✅ MQTT Discovery 지원 (unique_id)
-- ⚠️ REST API 모드는 unique_id 없음
+- ✅ 버튼 엔티티 지원 (MQTT 모드) 🆕
+- ⚠️ REST API 모드는 unique_id + 버튼 없음
 
 **권장**: 
 - 두 가지 모두 사용 (충돌 없음)
-- 애드온은 MQTT 모드로 설정
+- 애드온은 MQTT 모드로 설정 (기본값)
+- 통합구성요소: 고급 기능 (수동 구매, 서비스 등)
+- 애드온: 센서 + 간편 구매 + 통계
 
 ## 보안 주의사항
 
