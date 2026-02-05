@@ -251,12 +251,14 @@ class MQTTDiscovery:
         
         try:
             payload = json.dumps(config)
+            _LOGGER.debug(f"Publishing button discovery: {discovery_topic}")
+            _LOGGER.debug(f"Config: {payload}")
             result = self.client.publish(discovery_topic, payload, qos=1, retain=True)
             result.wait_for_publish()
-            _LOGGER.debug(f"Published button discovery for {button_id}: {discovery_topic}")
+            _LOGGER.info(f"✅ Published button discovery: button.{object_id}")
             return True
         except Exception as e:
-            _LOGGER.error(f"Failed to publish button discovery for {button_id}: {e}")
+            _LOGGER.error(f"❌ Failed to publish button discovery for {button_id}: {e}")
             return False
     
     def subscribe_to_commands(self, username: str, callback) -> bool:
@@ -275,12 +277,13 @@ class MQTTDiscovery:
         command_topic = f"homeassistant/button/dhlottery_addon_{username}_+/command"
         
         try:
-            self.client.subscribe(command_topic)
+            result = self.client.subscribe(command_topic)
             self.client.on_message = callback
-            _LOGGER.info(f"Subscribed to button commands: {command_topic}")
+            _LOGGER.info(f"✅ Subscribed to button commands: {command_topic}")
+            _LOGGER.info(f"📡 Waiting for button press events...")
             return True
         except Exception as e:
-            _LOGGER.error(f"Failed to subscribe to commands: {e}")
+            _LOGGER.error(f"❌ Failed to subscribe to commands: {e}")
             return False
 
 

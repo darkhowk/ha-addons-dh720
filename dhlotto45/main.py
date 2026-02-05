@@ -104,26 +104,38 @@ async def register_buttons():
         return
     
     username = config["username"]
+    logger.info(f"Registering button entities for user: {username}")
     
     # Button 1: Buy 1 Auto Game
-    mqtt_client.publish_button_discovery(
+    success1 = mqtt_client.publish_button_discovery(
         button_id="buy_auto_1",
         name="Buy 1 Auto Game",
         command_topic=f"homeassistant/button/dhlottery_addon_{username}_buy_auto_1/command",
         username=username,
         icon="mdi:ticket-confirmation",
     )
+    if success1:
+        logger.info("✅ Button registered: buy_auto_1")
+    else:
+        logger.error("❌ Failed to register button: buy_auto_1")
     
     # Button 2: Buy 5 Auto Games (Max)
-    mqtt_client.publish_button_discovery(
+    success2 = mqtt_client.publish_button_discovery(
         button_id="buy_auto_5",
         name="Buy 5 Auto Games",
         command_topic=f"homeassistant/button/dhlottery_addon_{username}_buy_auto_5/command",
         username=username,
         icon="mdi:ticket-confirmation-outline",
     )
+    if success2:
+        logger.info("✅ Button registered: buy_auto_5")
+    else:
+        logger.error("❌ Failed to register button: buy_auto_5")
     
-    logger.info("Button entities registered successfully")
+    if success1 and success2:
+        logger.info("🎯 All button entities registered successfully")
+    else:
+        logger.warning("⚠️ Some buttons failed to register")
 
 
 def on_button_command(client_mqtt, userdata, message):
@@ -132,7 +144,7 @@ def on_button_command(client_mqtt, userdata, message):
         topic = message.topic
         payload = message.payload.decode()
         
-        logger.info(f"Received button command: {topic} = {payload}")
+        logger.info(f"📩 Received button command: topic={topic}, payload={payload}")
         
         # Extract button_id from topic
         # Format: homeassistant/button/dhlottery_addon_USERNAME_BUTTON_ID/command
@@ -141,15 +153,23 @@ def on_button_command(client_mqtt, userdata, message):
             entity_id = parts[2]  # dhlottery_addon_USERNAME_BUTTON_ID
             
             # Extract button_id (buy_auto_1, buy_auto_5, etc.)
-            button_id = entity_id.split("_", 3)[-1] if "_" in entity_id else entity_id
-            
-            logger.info(f"Button pressed: {button_id}")
-            
-            # Execute purchase in background
-            asyncio.create_task(execute_button_purchase(button_id))
+            # entity_id format: dhlottery_addon_ng410808_buy_auto_1
+            parts_entity = entity_id.split("_")
+            if len(parts_entity) >= 4:
+                # Extract last 3 parts: buy_auto_1
+                button_id = "_".join(parts_entity[-3:])
+                
+                logger.info(f"🎯 Button pressed: {button_id}")
+                
+                # Execute purchase in background
+                asyncio.create_task(execute_button_purchase(button_id))
+            else:
+                logger.error(f"❌ Invalid entity_id format: {entity_id}")
+        else:
+            logger.error(f"❌ Invalid topic format: {topic}")
     
     except Exception as e:
-        logger.error(f"Error handling button command: {e}", exc_info=True)
+        logger.error(f"❌ Error handling button command: {e}", exc_info=True)
 
 
 async def execute_button_purchase(button_id: str):
@@ -159,7 +179,7 @@ async def execute_button_purchase(button_id: str):
         return
     
     try:
-        from dh_lotto_645 import DhLotto645
+        from dh_lotto_645 import DhLotto645, DhLotto645SelMode
         
         # Determine number of games
         count = 1
@@ -171,8 +191,8 @@ async def execute_button_purchase(button_id: str):
             logger.warning(f"Unknown button_id: {button_id}, defaulting to 1 game")
             count = 1
         
-        # Create auto game slots
-        slots = [DhLotto645.Slot(mode=DhLotto645.Slot.__dataclass_fields__['mode'].default) for _ in range(count)]
+        # Create auto game slots (simple and correct way)
+        slots = [DhLotto645.Slot(mode=DhLotto645SelMode.AUTO, numbers=[]) for _ in range(count)]
         
         logger.info(f"Executing purchase: {count} game(s)...")
         
@@ -223,7 +243,7 @@ async def init_client():
         
         # Initialize MQTT if enabled
         if config["use_mqtt"]:
-            logger.info("Initializing MQTT Discovery...")
+            logger.info("🔌 Initializing MQTT Discovery...")
             mqtt_client = MQTTDiscovery(
                 broker=os.getenv("MQTT_BROKER", "homeassistant.local"),
                 port=int(os.getenv("MQTT_PORT", "1883")),
@@ -231,19 +251,25 @@ async def init_client():
                 password=os.getenv("MQTT_PASSWORD"),
             )
             if mqtt_client.connect():
-                logger.info("MQTT Discovery initialized successfully")
+                logger.info("✅ MQTT Discovery initialized successfully")
                 
                 # Register button entities
                 if config["enable_lotto645"]:
+                    logger.info("🎮 Registering button entities...")
                     await register_buttons()
                     
                     # Subscribe to button commands
-                    mqtt_client.subscribe_to_commands(
+                    logger.info("📡 Subscribing to button commands...")
+                    success = mqtt_client.subscribe_to_commands(
                         config["username"],
                         on_button_command
                     )
+                    if success:
+                        logger.info("✅ Button command subscription successful")
+                    else:
+                        logger.error("❌ Button command subscription failed")
             else:
-                logger.warning("MQTT connection failed, falling back to REST API")
+                logger.warning("⚠️ MQTT connection failed, falling back to REST API")
                 mqtt_client = None
         
         logger.info("Client initialized successfully")
