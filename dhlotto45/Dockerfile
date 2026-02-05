@@ -9,6 +9,19 @@ ENV LANG=C.UTF-8 \
 # 작업 디렉토리
 WORKDIR /app
 
+# python/pip 설치 (base 이미지가 python을 포함하지 않는 경우 대비)
+RUN if command -v python3 >/dev/null 2>&1; then \
+        echo "python3 already installed"; \
+    elif command -v apk >/dev/null 2>&1; then \
+        apk add --no-cache python3 py3-pip; \
+    elif command -v apt-get >/dev/null 2>&1; then \
+        apt-get update && apt-get install -y python3 python3-pip && rm -rf /var/lib/apt/lists/*; \
+    elif command -v microdnf >/dev/null 2>&1; then \
+        microdnf install -y python3 python3-pip && microdnf clean all; \
+    else \
+        echo "No supported package manager found to install python3" && exit 1; \
+    fi
+
 # requirements 복사 및 설치
 COPY requirements.txt .
 RUN pip3 install --no-cache-dir --upgrade pip && \
