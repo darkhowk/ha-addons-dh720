@@ -33,7 +33,7 @@
   "hassio_role": "default",
   "auth_api": true,
   "ingress": true,
-  "ingress_port": 8099,
+  "ingress_port": 60099,
   "ingress_stream": false,
   "panel_icon": "mdi:ticket-confirmation",
   "panel_title": "동행복권",

@@ -188,7 +188,7 @@ Web UI 페이지
 
 **요청 예시**:
 ```bash
-curl -X POST "http://homeassistant.local:8099/random?count=6&games=2"
+curl -X POST "http://homeassistant.local:60099/random?count=6&games=2"
 ```
 
 **응답**:
@@ -341,7 +341,7 @@ automation:
 
 **해결 방법**:
 1. Info 탭에서 상태 확인
-2. Log 탭에서 "Port 8099 already in use" 확인
+2. Log 탭에서 "Port 60099 already in use" 확인
    - 포트 충돌 시 config.json 수정 필요 (고급 사용자)
 3. Ingress 사용 (Info 탭 > OPEN WEB UI 버튼)
 

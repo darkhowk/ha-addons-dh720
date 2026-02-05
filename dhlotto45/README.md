@@ -73,12 +73,12 @@ Info 탭에서 **OPEN WEB UI** 버튼 클릭
 
 또는 브라우저에서 직접 접속:
 ```
-http://homeassistant.local:8099
+http://homeassistant.local:60099
 ```
 
 ### API 사용
 
-- API 문서: `http://homeassistant.local:8099/docs`
+- API 문서: `http://homeassistant.local:60099/docs`
 - 헬스체크: `GET /health`
 - 예치금 조회: `GET /balance`
 - 통계 조회: `GET /stats`
