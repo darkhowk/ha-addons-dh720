@@ -1,11 +1,11 @@
 # DH Lottery Home Assistant Add-ons
 
-Home Assistant용 동행복권 통합 애드온 저장소입니다.
+Home Assistant 동행복권 로또 6/45 애드온 앱 입니다.
 
 ## 애드온 목록
 
-### DH Lotto 45
-동행복권 로또 6/45 통합 애드온
+### DH Lottery AddOn App
+동행복권 로또 6/45 애드온 앱
 
 **주요 기능:**
 - 예치금 조회 및 모니터링
