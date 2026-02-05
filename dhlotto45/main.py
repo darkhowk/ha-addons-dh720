@@ -719,7 +719,7 @@ async def update_sensors():
                 
                 # ========== Prize Details from Public API ==========
                 try:
-                    prize_details = await get_lotto645_winning_details(latest_round_info.round_no)
+                    prize_details = await get_lotto645_winning_details(client, latest_round_info.round_no)
                     
                     # Total sales
                     await publish_sensor("lotto645_total_sales", prize_details.total_sales, {
