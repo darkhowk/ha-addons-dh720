@@ -150,17 +150,17 @@ automation:
 
 ## 지원
 
-문제 보고: [GitHub Issues](https://github.com/YOUR_USERNAME/ha-addons-dhlottery/issues)
+문제 보고: [GitHub Issues](https://github.com/redchupa/ha-addons-dhlottery/issues)
 
 ## 후원
 
 이 애드온이 유용하셨다면 커피 한 잔 후원 부탁드립니다!
 
 ### Toss (토스)
-![Toss](https://raw.githubusercontent.com/YOUR_USERNAME/ha-addons-dhlottery/main/images/toss-donation.png)
+![Toss](https://raw.githubusercontent.com/redchupa/ha-addons-dhlottery/main/images/toss-donation.png)
 
 ### PayPal
-![PayPal](https://raw.githubusercontent.com/YOUR_USERNAME/ha-addons-dhlottery/main/images/paypal-donation.png)
+![PayPal](https://raw.githubusercontent.com/redchupa/ha-addons-dhlottery/main/images/paypal-donation.png)
 
 ## 라이선스
 
