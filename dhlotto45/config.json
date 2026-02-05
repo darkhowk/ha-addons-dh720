@@ -1,6 +1,6 @@
 {
   "name": "DH Lotto 45",
-  "version": "0.7.7",
+  "version": "0.7.8",
   "slug": "dhlotto45",
   "description": "DH Lottery Lottoey 6/45 Add-on with MQTT Discovery",
   "url": "https://github.com/redchupa/ha-addons-dhlottery",
