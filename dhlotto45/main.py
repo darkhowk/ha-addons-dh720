@@ -153,7 +153,7 @@ async def register_buttons():
     logger.info(f"[BUTTON] Button 1 command topic: {button1_topic}")
     
     success1 = mqtt_client.publish_button_discovery(
-        name="1게임 자동 구매",
+        button_id="buy_auto_1",
         name="1게임 자동 구매",
         command_topic=button1_topic,
         username=username,
@@ -171,7 +171,7 @@ async def register_buttons():
     logger.info(f"[BUTTON] Button 2 command topic: {button2_topic}")
     
     success2 = mqtt_client.publish_button_discovery(
-        name="5게임 자동 구매",
+        button_id="buy_auto_5",
         name="5게임 자동 구매",
         command_topic=button2_topic,
         username=username,
