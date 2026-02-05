@@ -108,13 +108,13 @@ def _translate_result(result: str) -> str:
     
     # Korean to English mapping
     translations = {
-        "미추첨": "Pending",
-        "낙첨": "No Win",
-        "1등": "1st Prize",
-        "2등": "2nd Prize",
-        "3등": "3rd Prize",
-        "4등": "4th Prize",
-        "5등": "5th Prize",
+        "ë¯¸ì¶”ì²¨": "Pending",
+        "ë‚™ì²¨": "No Win",
+        "1ë“±": "1st Prize",
+        "2ë“±": "2nd Prize",
+        "3ë“±": "3rd Prize",
+        "4ë“±": "4th Prize",
+        "5ë“±": "5th Prize",
     }
     
     for korean, english in translations.items():
@@ -775,20 +775,34 @@ async def update_sensors():
                     
                     logger.info("Latest purchase sensor published successfully")
                     
-                    # Publish individual game sensors (up to 5 games)
-                    logger.info(f"Publishing {len(latest_purchase.games)} individual game sensors...")
-                    for i, game in enumerate(latest_purchase.games[:5], 1):
+                    # Publish individual game sensors from all purchases (up to 5 total games)
+                    all_games = []
+                    for purchase in history:
+                        for game in purchase.games:
+                            all_games.append({
+                                'game': game,
+                                'round_no': purchase.round_no,
+                                'result': purchase.result
+                            })
+                            if len(all_games) >= 5:
+                                break
+                        if len(all_games) >= 5:
+                            break
+                    
+                    logger.info(f"Publishing {len(all_games)} individual game sensors from {len(history)} purchase(s)...")
+                    for i, game_info in enumerate(all_games, 1):
+                        game = game_info['game']
                         numbers_str = ", ".join(map(str, game.numbers))
                         await publish_sensor(f"lotto45_game_{i}", numbers_str, {
                             "slot": game.slot,
                             "mode": str(game.mode),
                             "numbers": game.numbers,
-                            "round_no": latest_purchase.round_no,
-                            "result": latest_purchase.result,
+                            "round_no": game_info['round_no'],
+                            "result": game_info['result'],
                             "friendly_name": f"Game {i}",
                             "icon": f"mdi:numeric-{i}-box-multiple",
                         })
-                        logger.info(f"Game {i} ({game.slot}): {numbers_str} - {game.mode}")
+                        logger.info(f"Game {i} ({game.slot}): {numbers_str} - {game.mode} (Round {game_info['round_no']})")
                     
                     # Count pending (not yet drawn) purchases
                     pending_count = 0
