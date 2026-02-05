@@ -3,7 +3,7 @@
   "version": "0.3.4",
   "slug": "dhlotto45",
   "description": "동행복권 로또 6/45 통합 애드온",
-  "url": "https://github.com/redchupa/dhlotto45-addon",
+  "url": "https://github.com/redchupa/ha-addons-dhlottery",
   "arch": ["amd64", "armv7", "aarch64"],
   "startup": "services",
   "boot": "auto",
