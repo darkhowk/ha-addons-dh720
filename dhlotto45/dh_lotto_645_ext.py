@@ -39,7 +39,7 @@ class Lotto645WinningDetails:
 
 async def get_lotto645_winning_details(client, round_no: Optional[int] = None) -> Lotto645WinningDetails:
     """
-    Get Lotto 6/45 winning details using authenticated client session
+    Get Lotto 6/45 winning details using internal API with authentication
     
     Args:
         client: DhLotteryClient instance with active session
@@ -47,49 +47,23 @@ async def get_lotto645_winning_details(client, round_no: Optional[int] = None) -
         
     Returns:
         Lotto645WinningDetails object
-        
-    Example response:
-    {
-        "totSellamnt": 111840714000,
-        "returnValue": "success",
-        "drwNoDate": "2024-05-11",
-        "firstWinamnt": 1396028764,
-        "firstPrzwnerCo": 19,
-        "firstAccumamnt": 26524546516,
-        "drwNo": 1119,
-        "drwtNo1": 1, "drwtNo2": 9, "drwtNo3": 12,
-        "drwtNo4": 13, "drwtNo5": 20, "drwtNo6": 45,
-        "bnusNo": 3
-    }
     """
-    params = {"method": "getLottoNumber"}
-    if round_no:
-        params["drwNo"] = round_no
-    
     try:
-        # Use authenticated session with AJAX headers
-        headers = {
-            "X-Requested-With": "XMLHttpRequest",
-            "Accept": "application/json, text/javascript, */*; q=0.01",
-            "Referer": "https://www.dhlottery.co.kr/gameResult.do?method=byWin",
+        # Use internal authenticated API endpoint
+        params = {
+            "method": "getLottoNumber",
         }
+        if round_no:
+            params["drwNo"] = round_no
         
-        async with client.session.get(
-            PUBLIC_API_URL, 
-            params=params, 
-            headers=headers,
-            timeout=10,
-            allow_redirects=False
-        ) as resp:
+        # Use client's session (already logged in)
+        url = f"https://www.dhlottery.co.kr/common.do"
+        
+        async with client.session.get(url, params=params, timeout=10) as resp:
             if resp.status != 200:
                 raise Exception(f"API request failed: {resp.status}")
             
-            # Check content type
-            content_type = resp.headers.get('Content-Type', '')
-            if 'application/json' not in content_type:
-                raise Exception(f"API returned HTML instead of JSON (Content-Type: {content_type})")
-            
-            # Parse JSON
+            # Parse JSON directly (no 'data' wrapper)
             data = await resp.json()
             
             if data.get("returnValue") != "success":
