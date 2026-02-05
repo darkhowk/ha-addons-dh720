@@ -7,7 +7,7 @@ import os
 import asyncio
 import logging
 from typing import Optional
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
@@ -97,6 +97,113 @@ def _get_lotto645_item(data: dict) -> dict:
     return data
 
 
+async def register_buttons():
+    """Register button entities via MQTT Discovery"""
+    if not mqtt_client or not mqtt_client.connected:
+        logger.warning("MQTT not connected, skipping button registration")
+        return
+    
+    username = config["username"]
+    
+    # Button 1: Buy 1 Auto Game
+    mqtt_client.publish_button_discovery(
+        button_id="buy_auto_1",
+        name="Buy 1 Auto Game",
+        command_topic=f"homeassistant/button/dhlottery_addon_{username}_buy_auto_1/command",
+        username=username,
+        icon="mdi:ticket-confirmation",
+    )
+    
+    # Button 2: Buy 5 Auto Games (Max)
+    mqtt_client.publish_button_discovery(
+        button_id="buy_auto_5",
+        name="Buy 5 Auto Games",
+        command_topic=f"homeassistant/button/dhlottery_addon_{username}_buy_auto_5/command",
+        username=username,
+        icon="mdi:ticket-confirmation-outline",
+    )
+    
+    logger.info("Button entities registered successfully")
+
+
+def on_button_command(client_mqtt, userdata, message):
+    """Handle MQTT button commands"""
+    try:
+        topic = message.topic
+        payload = message.payload.decode()
+        
+        logger.info(f"Received button command: {topic} = {payload}")
+        
+        # Extract button_id from topic
+        # Format: homeassistant/button/dhlottery_addon_USERNAME_BUTTON_ID/command
+        parts = topic.split("/")
+        if len(parts) >= 3:
+            entity_id = parts[2]  # dhlottery_addon_USERNAME_BUTTON_ID
+            
+            # Extract button_id (buy_auto_1, buy_auto_5, etc.)
+            button_id = entity_id.split("_", 3)[-1] if "_" in entity_id else entity_id
+            
+            logger.info(f"Button pressed: {button_id}")
+            
+            # Execute purchase in background
+            asyncio.create_task(execute_button_purchase(button_id))
+    
+    except Exception as e:
+        logger.error(f"Error handling button command: {e}", exc_info=True)
+
+
+async def execute_button_purchase(button_id: str):
+    """Execute purchase based on button_id"""
+    if not lotto_645:
+        logger.error("Lotto 645 not enabled")
+        return
+    
+    try:
+        from dh_lotto_645 import DhLotto645
+        
+        # Determine number of games
+        count = 1
+        if button_id == "buy_auto_5":
+            count = 5
+        elif button_id == "buy_auto_1":
+            count = 1
+        else:
+            logger.warning(f"Unknown button_id: {button_id}, defaulting to 1 game")
+            count = 1
+        
+        # Create auto game slots
+        slots = [DhLotto645.Slot(mode=DhLotto645.Slot.__dataclass_fields__['mode'].default) for _ in range(count)]
+        
+        logger.info(f"Executing purchase: {count} game(s)...")
+        
+        # Execute purchase
+        result = await lotto_645.async_buy(slots)
+        
+        logger.info(f"Purchase successful! Round: {result.round_no}, Barcode: {result.barcode}")
+        
+        # Send notification via sensor update
+        await publish_sensor("lotto45_last_purchase", datetime.now(timezone.utc).isoformat(), {
+            "round_no": result.round_no,
+            "barcode": result.barcode,
+            "issue_dt": result.issue_dt,
+            "games_count": len(result.games),
+            "friendly_name": "Last Purchase",
+            "icon": "mdi:receipt",
+        })
+        
+        # Update sensors immediately after purchase
+        await update_sensors()
+        
+    except Exception as e:
+        logger.error(f"Purchase failed: {e}", exc_info=True)
+        
+        # Send error notification
+        await publish_sensor("lotto45_last_purchase_error", str(e), {
+            "friendly_name": "Last Purchase Error",
+            "icon": "mdi:alert-circle",
+        })
+
+
 async def init_client():
     """Initialize client"""
     global client, lotto_645, analyzer, mqtt_client
@@ -125,6 +232,16 @@ async def init_client():
             )
             if mqtt_client.connect():
                 logger.info("MQTT Discovery initialized successfully")
+                
+                # Register button entities
+                if config["enable_lotto645"]:
+                    await register_buttons()
+                    
+                    # Subscribe to button commands
+                    mqtt_client.subscribe_to_commands(
+                        config["username"],
+                        on_button_command
+                    )
             else:
                 logger.warning("MQTT connection failed, falling back to REST API")
                 mqtt_client = None
@@ -215,10 +332,10 @@ async def custom_docs():
             </style>
         </head>
         <body>
-            <h1>📚 API Documentation</h1>
+            <h1>ðŸ“š API Documentation</h1>
             
             <div class="note">
-                <strong>💡 Tip:</strong> For full interactive Swagger UI, access directly via port:<br>
+                <strong>ðŸ’¡ Tip:</strong> For full interactive Swagger UI, access directly via port:<br>
                 <code>http://homeassistant.local:60099/docs</code>
             </div>
             
@@ -321,16 +438,16 @@ Response:
 ]
 
 Modes:
-- "Auto" (자동): System picks all 6 numbers
-- "Manual" (수동): You pick all 6 numbers
-- "Semi-Auto" (반자동): You pick some, system fills the rest
+- "Auto" (ìžë™): System picks all 6 numbers
+- "Manual" (ìˆ˜ë™): You pick all 6 numbers
+- "Semi-Auto" (ë°˜ìžë™): You pick some, system fills the rest
 
 Response:
 {
   "success": true,
   "round_no": 1122,
   "barcode": "59865 36399 04155 63917 56431 42167",
-  "issue_dt": "2024/05/28 화 17:55:27",
+  "issue_dt": "2024/05/28 í™” 17:55:27",
   "games": [...]
 }</pre>
             </div>
@@ -355,7 +472,7 @@ Response:
     {
       "round_no": 1122,
       "barcode": "...",
-      "result": "미추첨",
+      "result": "ë¯¸ì¶”ì²¨",
       "games": [...]
     }
   ]
@@ -384,7 +501,7 @@ curl -X POST "http://homeassistant.local:60099/buy/auto?count=3"</pre>
                 <li>Or use your Home Assistant IP: <code>http://YOUR_HA_IP:60099/docs</code></li>
             </ol>
             
-            <p><a href=".">← Back to Home</a></p>
+            <p><a href=".">â† Back to Home</a></p>
         </body>
     </html>
     """
@@ -613,7 +730,7 @@ async def publish_sensor(entity_id: str, state, attributes: dict = None):
 @app.get("/", response_class=HTMLResponse)
 async def root():
     """Main page"""
-    status_icon = "🟢" if client and client.logged_in else "🔴"
+    status_icon = "ðŸŸ¢" if client and client.logged_in else "ðŸ”´"
     status_text = "Connected" if client and client.logged_in else "Disconnected"
     
     return f"""
@@ -645,10 +762,10 @@ async def root():
             </div>
             <h2>Features v2.0</h2>
             <ul>
-                <li>✅ Improved login (RSA encryption + session management)</li>
-                <li>✅ User-Agent rotation (anti-bot detection)</li>
-                <li>✅ Circuit Breaker (continuous failure prevention)</li>
-                <li>✅ HA Sensor integration</li>
+                <li>âœ… Improved login (RSA encryption + session management)</li>
+                <li>âœ… User-Agent rotation (anti-bot detection)</li>
+                <li>âœ… Circuit Breaker (continuous failure prevention)</li>
+                <li>âœ… HA Sensor integration</li>
             </ul>
             <h2>Links</h2>
             <ul>
@@ -656,7 +773,7 @@ async def root():
                 <li><a href="health">Health Check</a></li>
                 <li><a href="stats">Statistics</a></li>
             </ul>
-            <p><strong>💡 Advanced:</strong> For interactive Swagger UI, access directly via port 60099:<br>
+            <p><strong>ðŸ’¡ Advanced:</strong> For interactive Swagger UI, access directly via port 60099:<br>
             <code>http://homeassistant.local:60099/docs</code></p>
         </body>
     </html>
@@ -802,11 +919,11 @@ async def buy_lotto(games: list[dict]):
         # Mode mapping (Korean to English)
         mode_map = {
             "Auto": DhLotto645SelMode.AUTO,
-            "자동": DhLotto645SelMode.AUTO,
+            "ìžë™": DhLotto645SelMode.AUTO,
             "Manual": DhLotto645SelMode.MANUAL,
-            "수동": DhLotto645SelMode.MANUAL,
+            "ìˆ˜ë™": DhLotto645SelMode.MANUAL,
             "Semi-Auto": DhLotto645SelMode.SEMI_AUTO,
-            "반자동": DhLotto645SelMode.SEMI_AUTO,
+            "ë°˜ìžë™": DhLotto645SelMode.SEMI_AUTO,
         }
         
         slots = []

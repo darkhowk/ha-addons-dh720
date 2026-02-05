@@ -195,6 +195,93 @@ class MQTTDiscovery:
         except Exception as e:
             _LOGGER.error(f"Failed to remove sensor {sensor_id}: {e}")
             return False
+    
+    def publish_button_discovery(
+        self,
+        button_id: str,
+        name: str,
+        command_topic: str,
+        username: str,
+        icon: Optional[str] = None,
+        device_class: Optional[str] = None,
+    ) -> bool:
+        """
+        Publish button discovery configuration
+        
+        Args:
+            button_id: Button ID (e.g., 'buy_auto_1', 'buy_auto_all')
+            name: Friendly name
+            command_topic: MQTT topic for commands
+            username: DH Lottery username
+            icon: Icon (e.g., 'mdi:ticket-confirmation')
+            device_class: Device class (e.g., 'restart')
+        """
+        if not self.connected:
+            _LOGGER.warning("Not connected to MQTT broker")
+            return False
+        
+        # Discovery topic: homeassistant/button/dhlottery_addon_USERNAME_BUTTON_ID/config
+        discovery_topic = f"homeassistant/button/dhlottery_addon_{username}_{button_id}/config"
+        
+        # Unique ID: dhlottery_addon_USERNAME_BUTTON_ID
+        unique_id = f"dhlottery_addon_{username}_{button_id}"
+        
+        # Entity ID: button.dhlottery_addon_USERNAME_BUTTON_ID
+        object_id = f"dhlottery_addon_{username}_{button_id}"
+        
+        config = {
+            "name": name,
+            "unique_id": unique_id,
+            "default_entity_id": f"button.{object_id}",
+            "command_topic": command_topic,
+            "device": {
+                "identifiers": [f"dhlottery_addon_{username}"],
+                "name": f"DH Lottery Add-on ({username})",
+                "manufacturer": "DH Lottery",
+                "model": "Add-on",
+                "sw_version": "2.0.0",
+            },
+        }
+        
+        # Optional fields
+        if icon:
+            config["icon"] = icon
+        if device_class:
+            config["device_class"] = device_class
+        
+        try:
+            payload = json.dumps(config)
+            result = self.client.publish(discovery_topic, payload, qos=1, retain=True)
+            result.wait_for_publish()
+            _LOGGER.debug(f"Published button discovery for {button_id}: {discovery_topic}")
+            return True
+        except Exception as e:
+            _LOGGER.error(f"Failed to publish button discovery for {button_id}: {e}")
+            return False
+    
+    def subscribe_to_commands(self, username: str, callback) -> bool:
+        """
+        Subscribe to button command topics
+        
+        Args:
+            username: DH Lottery username
+            callback: Callback function to handle messages
+        """
+        if not self.connected:
+            _LOGGER.warning("Not connected to MQTT broker")
+            return False
+        
+        # Subscribe to all button command topics
+        command_topic = f"homeassistant/button/dhlottery_addon_{username}_+/command"
+        
+        try:
+            self.client.subscribe(command_topic)
+            self.client.on_message = callback
+            _LOGGER.info(f"Subscribed to button commands: {command_topic}")
+            return True
+        except Exception as e:
+            _LOGGER.error(f"Failed to subscribe to commands: {e}")
+            return False
 
 
 async def publish_sensor_mqtt(
