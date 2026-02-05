@@ -1,6 +1,6 @@
 #!/usr/bin/with-contenv bashio
 
-bashio::log.info "Starting Lotto 45 Add-on v0.4.8..."
+bashio::log.info "Starting Lotto 45 Add-on v0.5.3..."
 
 # Configuration variables
 export USERNAME=$(bashio::config 'username')
@@ -11,8 +11,7 @@ export USE_MQTT=$(bashio::config 'use_mqtt')
 export SUPERVISOR_TOKEN="${SUPERVISOR_TOKEN}"
 
 # MQTT configuration (optional)
-export MQTT_BROKER=$(bashio::config 'mqtt_broker' 'homeassistant.local')
-export MQTT_PORT=$(bashio::config 'mqtt_port' '1883')
+export MQTT_URL=$(bashio::config 'mqtt_url' 'mqtt://homeassistant.local:1883')
 export MQTT_USERNAME=$(bashio::config 'mqtt_username' '')
 export MQTT_PASSWORD=$(bashio::config 'mqtt_password' '')
 
@@ -25,7 +24,7 @@ bashio::log.info "Update interval: ${UPDATE_INTERVAL}s"
 bashio::log.info "Use MQTT: ${USE_MQTT}"
 
 if bashio::config.true 'use_mqtt'; then
-    bashio::log.info "MQTT enabled - Broker: ${MQTT_BROKER}:${MQTT_PORT}"
+    bashio::log.info "MQTT enabled - URL: ${MQTT_URL}"
 fi
 
 # Run Python application

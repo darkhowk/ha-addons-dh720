@@ -1,8 +1,8 @@
 {
   "name": "DH Lotto 45",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "slug": "dhlotto45",
-  "description": "동행복권 로또 6/45 통합 애드온 (MQTT Discovery + 구매 버튼 지원)",
+  "description": "DH Lottery Lotto 6/45 Add-on with MQTT Discovery and Button Support",
   "url": "https://github.com/redchupa/ha-addons-dhlottery",
   "arch": ["amd64", "armv7", "aarch64"],
   "build_from": {
@@ -19,8 +19,7 @@
     "enable_lotto645": true,
     "update_interval": 3600,
     "use_mqtt": true,
-    "mqtt_broker": "homeassistant.local",
-    "mqtt_port": 1883,
+    "mqtt_url": "mqtt://homeassistant.local:1883",
     "mqtt_username": "",
     "mqtt_password": ""
   },
@@ -30,8 +29,7 @@
     "enable_lotto645": "bool",
     "update_interval": "int(60,86400)?",
     "use_mqtt": "bool?",
-    "mqtt_broker": "str?",
-    "mqtt_port": "int?",
+    "mqtt_url": "str?",
     "mqtt_username": "str?",
     "mqtt_password": "password?"
   },
@@ -39,7 +37,7 @@
     "60099/tcp": 60099
   },
   "ports_description": {
-    "60099/tcp": "Web UI 및 API"
+    "60099/tcp": "Web UI and API"
   },
   "homeassistant_api": true,
   "hassio_api": true,
@@ -49,7 +47,7 @@
   "ingress_port": 60099,
   "ingress_stream": false,
   "panel_icon": "mdi:ticket-confirmation",
-  "panel_title": "동행복권",
+  "panel_title": "DH Lottery",
   "host_network": false,
   "privileged": [],
   "full_access": false,

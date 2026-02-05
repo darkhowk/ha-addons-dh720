@@ -1,7 +1,7 @@
 """
-Lotto 45 Add-on Main Application v2.1
+Lotto 45 Add-on Main Application v0.5.3
 Home Assistant Add-on for DH Lottery 6/45
-v0.4.9 - MQTT Discovery + Button Support
+v0.5.3 - MQTT Discovery + Button Support
 """
 
 import os
@@ -111,32 +111,32 @@ async def register_buttons():
     success1 = mqtt_client.publish_button_discovery(
         button_id="buy_auto_1",
         name="Buy 1 Auto Game",
-        command_topic=f"homeassistant/button/dhlottery_addon_{username}_buy_auto_1/command",
+        command_topic=f"homeassistant/button/dhlotto_{username}_buy_auto_1/command",
         username=username,
         icon="mdi:ticket-confirmation",
     )
     if success1:
-        logger.info("✅ Button registered: buy_auto_1")
+        logger.info(" Button registered: buy_auto_1")
     else:
-        logger.error("❌ Failed to register button: buy_auto_1")
+        logger.error(" Failed to register button: buy_auto_1")
     
     # Button 2: Buy 5 Auto Games (Max)
     success2 = mqtt_client.publish_button_discovery(
         button_id="buy_auto_5",
         name="Buy 5 Auto Games",
-        command_topic=f"homeassistant/button/dhlottery_addon_{username}_buy_auto_5/command",
+        command_topic=f"homeassistant/button/dhlotto_{username}_buy_auto_5/command",
         username=username,
         icon="mdi:ticket-confirmation-outline",
     )
     if success2:
-        logger.info("✅ Button registered: buy_auto_5")
+        logger.info(" Button registered: buy_auto_5")
     else:
-        logger.error("❌ Failed to register button: buy_auto_5")
+        logger.error(" Failed to register button: buy_auto_5")
     
     if success1 and success2:
-        logger.info("🎯 All button entities registered successfully")
+        logger.info(" All button entities registered successfully")
     else:
-        logger.warning("⚠️ Some buttons failed to register")
+        logger.warning(" Some buttons failed to register")
 
 
 def on_button_command(client_mqtt, userdata, message):
@@ -145,32 +145,32 @@ def on_button_command(client_mqtt, userdata, message):
         topic = message.topic
         payload = message.payload.decode()
         
-        logger.info(f"📩 Received button command: topic={topic}, payload={payload}")
+        logger.info(f" Received button command: topic={topic}, payload={payload}")
         
         # Extract button_id from topic
-        # Format: homeassistant/button/dhlottery_addon_USERNAME_BUTTON_ID/command
+        # Format: homeassistant/button/dhlotto_USERNAME_BUTTON_ID/command
         parts = topic.split("/")
         if len(parts) >= 3:
-            entity_id = parts[2]  # dhlottery_addon_USERNAME_BUTTON_ID
+            entity_id = parts[2]  # dhlotto_USERNAME_BUTTON_ID
             
             # Extract button_id (buy_auto_1, buy_auto_5, etc.)
-            # entity_id format: dhlottery_addon_ng410808_buy_auto_1
+            # entity_id format: dhlotto_ng410808_buy_auto_1
             parts_entity = entity_id.split("_")
             if len(parts_entity) >= 4:
                 # Extract last 3 parts: buy_auto_1
                 button_id = "_".join(parts_entity[-3:])
                 
-                logger.info(f"🎯 Button pressed: {button_id}")
+                logger.info(f" Button pressed: {button_id}")
                 
                 # Execute purchase in background
                 asyncio.create_task(execute_button_purchase(button_id))
             else:
-                logger.error(f"❌ Invalid entity_id format: {entity_id}")
+                logger.error(f" Invalid entity_id format: {entity_id}")
         else:
-            logger.error(f"❌ Invalid topic format: {topic}")
+            logger.error(f" Invalid topic format: {topic}")
     
     except Exception as e:
-        logger.error(f"❌ Error handling button command: {e}", exc_info=True)
+        logger.error(f" Error handling button command: {e}", exc_info=True)
 
 
 async def execute_button_purchase(button_id: str):
@@ -234,7 +234,7 @@ async def init_client():
         return False
     
     try:
-        logger.info("Initializing DH Lottery client v2.1...")
+        logger.info("Initializing DH Lottery client v0.5.3...")
         client = DhLotteryClient(config["username"], config["password"])
         await client.async_login()
         
@@ -244,33 +244,32 @@ async def init_client():
         
         # Initialize MQTT if enabled
         if config["use_mqtt"]:
-            logger.info("🔌 Initializing MQTT Discovery...")
+            logger.info(" Initializing MQTT Discovery...")
             mqtt_client = MQTTDiscovery(
-                broker=os.getenv("MQTT_BROKER", "homeassistant.local"),
-                port=int(os.getenv("MQTT_PORT", "1883")),
+                mqtt_url=os.getenv("MQTT_URL", "mqtt://homeassistant.local:1883"),
                 username=os.getenv("MQTT_USERNAME"),
                 password=os.getenv("MQTT_PASSWORD"),
             )
             if mqtt_client.connect():
-                logger.info("✅ MQTT Discovery initialized successfully")
+                logger.info(" MQTT Discovery initialized successfully")
                 
                 # Register button entities
                 if config["enable_lotto645"]:
-                    logger.info("🎮 Registering button entities...")
+                    logger.info(" Registering button entities...")
                     await register_buttons()
                     
                     # Subscribe to button commands
-                    logger.info("📡 Subscribing to button commands...")
+                    logger.info(" Subscribing to button commands...")
                     success = mqtt_client.subscribe_to_commands(
                         config["username"],
                         on_button_command
                     )
                     if success:
-                        logger.info("✅ Button command subscription successful")
+                        logger.info(" Button command subscription successful")
                     else:
-                        logger.error("❌ Button command subscription failed")
+                        logger.error(" Button command subscription failed")
             else:
-                logger.warning("⚠️ MQTT connection failed, falling back to REST API")
+                logger.warning(" MQTT connection failed, falling back to REST API")
                 mqtt_client = None
         
         logger.info("Client initialized successfully")
@@ -303,7 +302,7 @@ async def cleanup_client():
 async def lifespan(app: FastAPI):
     """Application lifecycle manager"""
     # Startup
-    logger.info("Starting Lotto 45 Add-on v2.1...")
+    logger.info("Starting Lotto 45 Add-on v0.5.3...")
     logger.info(f"Configuration: username={config['username']}, "
                 f"enable_lotto645={config['enable_lotto645']}, "
                 f"update_interval={config['update_interval']}")
@@ -332,7 +331,7 @@ async def lifespan(app: FastAPI):
 # FastAPI app
 app = FastAPI(
     title="Lotto 45",
-    version="2.1.0",
+    version="0.5.3",
     lifespan=lifespan
 )
 
@@ -359,10 +358,10 @@ async def custom_docs():
             </style>
         </head>
         <body>
-            <h1>ðŸ“š API Documentation</h1>
+            <h1> API Documentation</h1>
             
             <div class="note">
-                <strong>ðŸ’¡ Tip:</strong> For full interactive Swagger UI, access directly via port:<br>
+                <strong> Tip:</strong> For full interactive Swagger UI, access directly via port:<br>
                 <code>http://homeassistant.local:60099/docs</code>
             </div>
             
@@ -377,7 +376,7 @@ async def custom_docs():
   "logged_in": true,
   "username": "your_id",
   "lotto645_enabled": true,
-  "version": "2.0.0"
+  "version": "0.5.3"
 }</pre>
             </div>
             
@@ -465,16 +464,16 @@ Response:
 ]
 
 Modes:
-- "Auto" (ìžë™): System picks all 6 numbers
-- "Manual" (ìˆ˜ë™): You pick all 6 numbers
-- "Semi-Auto" (ë°˜ìžë™): You pick some, system fills the rest
+- "Auto" (): System picks all 6 numbers
+- "Manual" (): You pick all 6 numbers
+- "Semi-Auto" (): You pick some, system fills the rest
 
 Response:
 {
   "success": true,
   "round_no": 1122,
   "barcode": "59865 36399 04155 63917 56431 42167",
-  "issue_dt": "2024/05/28 í™” 17:55:27",
+  "issue_dt": "2024/05/28  17:55:27",
   "games": [...]
 }</pre>
             </div>
@@ -499,7 +498,7 @@ Response:
     {
       "round_no": 1122,
       "barcode": "...",
-      "result": "ë¯¸ì¶”ì²¨",
+      "result": "",
       "games": [...]
     }
   ]
@@ -528,7 +527,7 @@ curl -X POST "http://homeassistant.local:60099/buy/auto?count=3"</pre>
                 <li>Or use your Home Assistant IP: <code>http://YOUR_HA_IP:60099/docs</code></li>
             </ol>
             
-            <p><a href=".">â† Back to Home</a></p>
+            <p><a href="."> Back to Home</a></p>
         </body>
     </html>
     """
@@ -757,7 +756,7 @@ async def publish_sensor(entity_id: str, state, attributes: dict = None):
 @app.get("/", response_class=HTMLResponse)
 async def root():
     """Main page"""
-    status_icon = "ðŸŸ¢" if client and client.logged_in else "ðŸ”´"
+    status_icon = "" if client and client.logged_in else ""
     status_text = "Connected" if client and client.logged_in else "Disconnected"
     
     return f"""
@@ -765,7 +764,7 @@ async def root():
     <html>
         <head>
             <meta charset="UTF-8">
-            <title>Lotto 45 v2.0</title>
+            <title>Lotto 45 v0.5.3</title>
             <style>
                 body {{ font-family: Arial, sans-serif; margin: 40px; }}
                 h1 {{ color: #333; }}
@@ -777,7 +776,7 @@ async def root():
             </style>
         </head>
         <body>
-            <h1>DH Lottery Lotto 45 <span class="version">v2.0</span></h1>
+            <h1>DH Lottery Lotto 45 <span class="version">v0.5.3</span></h1>
             <div class="status">
                 Status: {status_icon} {status_text}
             </div>
@@ -787,12 +786,12 @@ async def root():
                 <p><strong>Lotto 645 Enabled:</strong> {config['enable_lotto645']}</p>
                 <p><strong>Version:</strong> 2.0.0 (Improved Login & Sensors)</p>
             </div>
-            <h2>Features v2.0</h2>
+            <h2>Features v0.5.3</h2>
             <ul>
-                <li>âœ… Improved login (RSA encryption + session management)</li>
-                <li>âœ… User-Agent rotation (anti-bot detection)</li>
-                <li>âœ… Circuit Breaker (continuous failure prevention)</li>
-                <li>âœ… HA Sensor integration</li>
+                <li> Improved login (RSA encryption + session management)</li>
+                <li> User-Agent rotation (anti-bot detection)</li>
+                <li> Circuit Breaker (continuous failure prevention)</li>
+                <li> HA Sensor integration</li>
             </ul>
             <h2>Links</h2>
             <ul>
@@ -800,7 +799,7 @@ async def root():
                 <li><a href="health">Health Check</a></li>
                 <li><a href="stats">Statistics</a></li>
             </ul>
-            <p><strong>ðŸ’¡ Advanced:</strong> For interactive Swagger UI, access directly via port 60099:<br>
+            <p><strong> Advanced:</strong> For interactive Swagger UI, access directly via port 60099:<br>
             <code>http://homeassistant.local:60099/docs</code></p>
         </body>
     </html>
@@ -816,7 +815,7 @@ async def health():
         "username": config["username"],
         "lotto645_enabled": config["enable_lotto645"],
         "mqtt_enabled": config["use_mqtt"],
-        "version": "2.1.0 (0.4.9)",
+        "version": "2.1.0 (0.5.3)",
     }
 
 
@@ -947,11 +946,11 @@ async def buy_lotto(games: list[dict]):
         # Mode mapping (Korean to English)
         mode_map = {
             "Auto": DhLotto645SelMode.AUTO,
-            "ìžë™": DhLotto645SelMode.AUTO,
+            "": DhLotto645SelMode.AUTO,
             "Manual": DhLotto645SelMode.MANUAL,
-            "ìˆ˜ë™": DhLotto645SelMode.MANUAL,
+            "": DhLotto645SelMode.MANUAL,
             "Semi-Auto": DhLotto645SelMode.SEMI_AUTO,
-            "ë°˜ìžë™": DhLotto645SelMode.SEMI_AUTO,
+            "": DhLotto645SelMode.SEMI_AUTO,
         }
         
         slots = []

@@ -14,12 +14,12 @@ DH_LOTTERY_URL = "https://www.dhlottery.co.kr"
 
 @dataclass
 class DhLotteryBalanceData:
-    deposit: int = 0  # 총예치금
-    purchase_available: int = 0  # 구매가능금액
-    reservation_purchase: int = 0  # 예약구매금액
+    deposit: int = 0  # 총Balance
+    purchase_available: int = 0  # purchase능금액
+    reservation_purchase: int = 0  # 예약purchase금액
     withdrawal_request: int = 0  # 출금신청중금액
-    purchase_impossible: int = 0  # 구매불가능금액
-    this_month_accumulated_purchase: int = 0  # 이번달누적구매금액
+    purchase_impossible: int = 0  # purchase불능금액
+    this_month_accumulated_purchase: int = 0  # 번달누적purchase금액
 
 
 class DhLotteryError(Exception):
@@ -29,14 +29,14 @@ class DhAPIError(DhLotteryError):
     """DH API 예외 클래스입니다."""
 
 class DhLotteryLoginError(DhLotteryError):
-    """로그인에 실패했을 때 발생하는 예외입니다."""
+    """Login failed했 때 발생하는 예외입니다."""
 
 
 class DhLotteryClient:
-    """동행복권 클라이언트 클래스입니다."""
+    """동행복권 클라언트 클래스입니다."""
 
     def __init__(self, username: str, password: str):
-        """DhLotteryClient 클래스를 초기화합니다."""
+        """DhLotteryClient 클래스 초기화합니다."""
         self.username = username
         self._password = password
         self.session: Optional[aiohttp.ClientSession] = None
@@ -46,7 +46,7 @@ class DhLotteryClient:
         self._create_session()
 
     def _create_session(self):
-        """세션을 생성합니다."""
+        """세션 생성합니다."""
         if self.session and not self.session.closed:
             return
         
@@ -77,7 +77,7 @@ class DhLotteryClient:
         )
 
     async def close(self):
-        """세션을 종료합니다."""
+        """세션 ended합니다."""
         if self.session and not self.session.closed:
             await self.session.close()
             self.session = None
@@ -85,21 +85,21 @@ class DhLotteryClient:
 
     @staticmethod
     async def handle_response_json(response: aiohttp.ClientResponse) -> dict[str, Any]:
-        """응답을 JSON으로 파싱합니다."""
+        """응답 JSON으로 파싱합니다."""
         try:
             result = await response.json()
         except Exception as ex:
-            raise DhAPIError(f'❗ API 응답을 파싱할 수 없습니다: {ex}')
+            raise DhAPIError(f'[ERROR]  API    : {ex}')
 
         if response.status != 200 or response.reason != 'OK':
-            raise DhAPIError(f'❗ API 요청에 실패했습니다: {response.status} {response.reason}')
+            raise DhAPIError(f'[ERROR]  API  failed: {response.status} {response.reason}')
 
         if 'data' not in result:
-            raise DhLotteryError('❗ API 응답 데이터가 올바르지 않습니다.')
+            raise DhLotteryError('[ERROR]  API    .')
         return result.get('data', {})
 
     async def async_get(self, path: str, params: dict) -> dict:
-        """로그인이 필요하지 않은 페이지를 가져옵니다."""
+        """Login 필요 not page 져옵니다."""
         if not self.session or self.session.closed:
             self._create_session()
         
@@ -113,7 +113,7 @@ class DhLotteryClient:
             raise
         except Exception as ex:
             raise DhLotteryError(
-                f"❗페이지를 가져오지 못했습니다: {ex}"
+                f"[ERROR] page fetch failed: {ex}"
             ) from ex
 
     async def async_get_with_login(
@@ -122,7 +122,7 @@ class DhLotteryClient:
         params: dict,
         retry: int = 1,
     ) -> dict[str, Any]:
-        """로그인이 필요한 페이지를 가져옵니다."""
+        """Login 필요한 page 져옵니다."""
         async with self._lock:
             try:
                 return await self.async_get(path, params)
@@ -131,17 +131,17 @@ class DhLotteryClient:
                     _LOGGER.info("API error, retrying with login...")
                     await self.async_login()
                     return await self.async_get_with_login(path, params, retry - 1)
-                raise DhLotteryLoginError("❗로그인 또는 API 요청에 실패했습니다.")
+                raise DhLotteryLoginError("[ERROR] Login  API  failed.")
             except DhLotteryError:
                 raise
             except Exception as ex:
                 raise DhLotteryError(
-                    f"❗로그인이 필요한 페이지를 가져오지 못했습니다: {ex}"
+                    f"[ERROR] Login  page fetch failed: {ex}"
                 ) from ex
 
     async def async_login(self):
-        """로그인을 수행합니다."""
-        _LOGGER.info("로그인 시작")
+        """Login 수행합니다."""
+        _LOGGER.info("Login ")
         
         if not self.session or self.session.closed:
             self._create_session()
@@ -150,7 +150,7 @@ class DhLotteryClient:
             # RSA 키 획득
             await self._async_set_select_rsa_module()
             
-            # 로그인 POST 요청
+            # Login POST 요청
             resp = await self.session.post(
                 url=f"{DH_LOTTERY_URL}/login/securityLoginCheck.do",
                 data={
@@ -158,52 +158,52 @@ class DhLotteryClient:
                     "userPswdEncn": self._rsa_key.encrypt(self._password),
                     "inpUserId": self.username,
                 },
-                allow_redirects=True,  # 리다이렉트 자동 처리
+                allow_redirects=True,  # 리다렉트 자동 처리
             )
             
-            # 로그인 성공 확인
+            # Login 성공 확인
             final_url = str(resp.url)
-            _LOGGER.info(f"로그인 후 최종 URL: {final_url}")
-            _LOGGER.info(f"응답 상태: {resp.status} {resp.reason}")
+            _LOGGER.info(f"Login   URL: {final_url}")
+            _LOGGER.info(f" : {resp.status} {resp.reason}")
             
-            # 리다이렉트 히스토리 확인
+            # 리다렉트 히스토리 확인
             if resp.history:
-                _LOGGER.info(f"리다이렉트 발생: {len(resp.history)}회")
+                _LOGGER.info(f" : {len(resp.history)}")
                 for i, redirect_resp in enumerate(resp.history):
                     _LOGGER.debug(f"  {i+1}. {redirect_resp.status} -> {redirect_resp.url}")
             
-            # 성공 조건: 200 OK이고 URL에 loginSuccess.do 포함
+            # 성공 조건: 200 OK고 URL loginSuccess.do 포함
             if resp.status == 200 and 'loginSuccess.do' in final_url:
                 self.logged_in = True
-                _LOGGER.info("로그인 성공!")
+                _LOGGER.info("Login !")
                 return
             
-            # 실패 처리
-            _LOGGER.error(f"로그인 실패 - Status: {resp.status}, URL: {final_url}")
+            # failed 처리
+            _LOGGER.error(f"Login failed - Status: {resp.status}, URL: {final_url}")
             self.logged_in = False
             
             # 응답 내용 확인 (디버깅용)
             try:
                 response_text = await resp.text()
-                if "실패" in response_text or "오류" in response_text:
-                    _LOGGER.error(f"응답 내용에 오류 메시지 포함: {response_text[:200]}")
+                if "failed" in response_text or "" in response_text:
+                    _LOGGER.error(f"    : {response_text[:200]}")
             except:
                 pass
             
             raise DhLotteryLoginError(
-                "로그인에 실패했습니다. 아이디 또는 비밀번호를 확인해주세요. "
-                "(5회 실패했을 수도 있습니다. 이 경우엔 홈페이지에서 비밀번호를 변경해야 합니다)"
+                "Login failed.   number . "
+                "(5 failed  .   page number  )"
             )
             
         except DhLotteryError:
             raise
         except Exception as ex:
             self.logged_in = False
-            _LOGGER.exception("로그인 중 예외 발생")
-            raise DhLotteryError(f"❗로그인을 수행하지 못했습니다: {ex}") from ex
+            _LOGGER.exception("Login   ")
+            raise DhLotteryError(f"[ERROR] Login execute failed: {ex}") from ex
 
     async def _async_set_select_rsa_module(self) -> None:
-        """RSA 모듈을 설정합니다. API 우선, 실패 시 로그인 페이지에서 파싱"""
+        """RSA 모듈 설정합니다. API 우선, failed 시 Login page서 파싱"""
         try:
             # 먼저 API 엔드포인트 시도
             resp = await self.session.get(
@@ -215,18 +215,18 @@ class DhLotteryClient:
                 self._rsa_key.set_public(
                     data.get("rsaModulus"), data.get("publicExponent")
                 )
-                _LOGGER.info("RSA 키를 API에서 가져왔습니다.")
+                _LOGGER.info("RSA  API .")
                 return
         except Exception as e:
-            _LOGGER.warning(f"API에서 RSA 키 가져오기 실패: {e}, 로그인 페이지에서 파싱 시도")
+            _LOGGER.warning(f"API RSA   failed: {e}, Login page  ")
         
-        # API 실패 시 로그인 페이지에서 RSA 키 파싱
+        # API failed 시 Login page서 RSA 키 파싱
         try:
             import re
             resp = await self.session.get(url=f"{DH_LOTTERY_URL}/login")
             html = await resp.text()
             
-            # HTML에서 rsaModulus와 publicExponent 추출
+            # HTML서 rsaModulus와 publicExponent 추출
             modulus_match = re.search(r"var\s+rsaModulus\s*=\s*'([a-fA-F0-9]+)'", html)
             exponent_match = re.search(r"var\s+publicExponent\s*=\s*'([a-fA-F0-9]+)'", html)
             
@@ -235,15 +235,15 @@ class DhLotteryClient:
                     modulus_match.group(1),
                     exponent_match.group(1)
                 )
-                _LOGGER.info("RSA 키를 로그인 페이지에서 파싱했습니다.")
+                _LOGGER.info("RSA  Login page .")
                 return
             else:
-                raise DhLotteryError("로그인 페이지에서 RSA 키를 찾을 수 없습니다.")
+                raise DhLotteryError("Login page RSA    .")
         except Exception as ex:
-            raise DhLotteryError(f"RSA 키를 가져오지 못했습니다: {ex}") from ex
+            raise DhLotteryError(f"RSA  fetch failed: {ex}") from ex
 
     async def async_get_balance(self) -> DhLotteryBalanceData:
-        """예치금 현황을 조회합니다."""
+        """Balance status query합니다."""
         try:
             current_time = int(datetime.datetime.now().timestamp() * 1000)
             user_result = await self.async_get_with_login(
@@ -283,10 +283,10 @@ class DhLotteryClient:
                 this_month_accumulated_purchase=wly_prchs_acml_amt,
             )
         except Exception as ex:
-            raise DhLotteryError(f"❗예치금 현황을 조회하지 못했습니다: {ex}") from ex
+            raise DhLotteryError(f"[ERROR] Balance status query failed: {ex}") from ex
 
     async def async_get_buy_list(self, lotto_id: str) -> list[dict[str, Any]]:
-        """1주일간의 구매내역을 조회합니다."""
+        """1주일간 purchasehistory query합니다."""
         end_date = datetime.datetime.now()
         start_date = end_date - datetime.timedelta(days=7)
         try:
@@ -304,11 +304,11 @@ class DhLotteryClient:
             return result.get("list", [])
         except Exception as ex:
             raise DhLotteryError(
-                f"❗최근 1주일간의 구매내역을 조회하지 못했습니다: {ex}"
+                f"[ERROR] recent 1 purchasehistory query failed: {ex}"
             ) from ex
 
     async def async_get_accumulated_prize(self, lotto_id: str) -> int:
-        """지급기한이 종료되지 않은 당첨금 누적금액을 조회합니다. 기간 1년"""
+        """payment deadline ended되지 not winning금 accumulated amount query합니다. 기간 1년"""
         end_date = datetime.datetime.now()
         start_date = end_date - datetime.timedelta(days=365)
         try:
@@ -333,7 +333,7 @@ class DhLotteryClient:
 
         except Exception as ex:
             raise DhLotteryError(
-                f"❗지급기한이 종료되지 않은 당첨금을 조회하지 못하였습니다: {ex}"
+                f"[ERROR] payment deadline ended not winning query : {ex}"
             ) from ex
 
     def __del__(self):
@@ -342,7 +342,7 @@ class DhLotteryClient:
             _LOGGER.warning("Session was not properly closed")
 
     async def async_get_balance(self) -> DhLotteryBalanceData:
-        """예치금 현황을 조회합니다."""
+        """Balance status query합니다."""
         try:
             current_time = int(datetime.datetime.now().timestamp() * 1000)
             user_result = await self.async_get_with_login(
@@ -382,10 +382,10 @@ class DhLotteryClient:
                 this_month_accumulated_purchase=wly_prchs_acml_amt,
             )
         except Exception as ex:
-            raise DhLotteryError(f"❗예치금 현황을 조회하지 못했습니다: {ex}") from ex
+            raise DhLotteryError(f"[ERROR] Balance status query failed: {ex}") from ex
 
     async def async_get_buy_list(self, lotto_id: str) -> list[dict[str, Any]]:
-        """1주일간의 구매내역을 조회합니다."""
+        """1주일간 purchasehistory query합니다."""
         end_date = datetime.datetime.now()
         start_date = end_date - datetime.timedelta(days=7)
         try:
@@ -403,11 +403,11 @@ class DhLotteryClient:
             return result.get("list", [])
         except Exception as ex:
             raise DhLotteryError(
-                f"❗최근 1주일간의 구매내역을 조회하지 못했습니다: {ex}"
+                f"[ERROR] recent 1 purchasehistory query failed: {ex}"
             ) from ex
 
     async def async_get_accumulated_prize(self, lotto_id: str) -> int:
-        """지급기한이 종료되지 않은 당첨금 누적금액을 조회합니다. 기간 1년"""
+        """payment deadline ended되지 not winning금 accumulated amount query합니다. 기간 1년"""
         end_date = datetime.datetime.now()
         start_date = end_date - datetime.timedelta(days=365)
         try:
@@ -432,7 +432,7 @@ class DhLotteryClient:
 
         except Exception as ex:
             raise DhLotteryError(
-                f"❗지급기한이 종료되지 않은 당첨금을 조회하지 못하였습니다: {ex}"
+                f"[ERROR] payment deadline ended not winning query : {ex}"
             ) from ex
 
     def __del__(self):
