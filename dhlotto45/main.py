@@ -720,8 +720,11 @@ async def update_sensors():
                 history = await lotto_645.async_get_buy_history_this_week()
                 
                 if history:
+                    logger.info(f"Found {len(history)} purchase(s) in history")
+                    
                     # Get the most recent purchase
                     latest_purchase = history[0]
+                    logger.info(f"Latest purchase - Round: {latest_purchase.round_no}, Result: {latest_purchase.result}")
                     
                     # Format games for display
                     games_info = []
@@ -731,6 +734,8 @@ async def update_sensors():
                             "mode": str(game.mode),
                             "numbers": game.numbers
                         })
+                    
+                    logger.info(f"Publishing latest purchase sensor (Round {latest_purchase.round_no})...")
                     
                     # Publish latest purchase sensor
                     await publish_sensor("lotto45_latest_purchase", latest_purchase.round_no, {
@@ -743,6 +748,8 @@ async def update_sensors():
                         "icon": "mdi:receipt-text",
                     })
                     
+                    logger.info("Latest purchase sensor published successfully")
+                    
                     # Count pending (not yet drawn) purchases
                     pending_count = 0
                     for h in history:
@@ -751,20 +758,24 @@ async def update_sensors():
                         if "not" in result_lower or "drawn" not in result_lower:
                             pending_count += 1
                     
+                    total_games = sum(len(h.games) for h in history)
+                    logger.info(f"Publishing history count sensor (Total: {len(history)}, Games: {total_games}, Pending: {pending_count})...")
+                    
                     # Publish purchase history count
                     await publish_sensor("lotto45_purchase_history_count", len(history), {
-                        "total_games": sum(len(h.games) for h in history),
+                        "total_games": total_games,
                         "pending_count": pending_count,
                         "friendly_name": "Purchase History Count",
                         "icon": "mdi:counter",
                     })
                     
+                    logger.info("History count sensor published successfully")
                     logger.info(f"Purchase history updated: {len(history)} purchases found")
                 else:
                     logger.info("No purchase history found")
                     
             except Exception as e:
-                logger.warning(f"Failed to get purchase history: {e}", exc_info=True)
+                logger.error(f"Failed to get purchase history: {e}", exc_info=True)
         
         # Update time (with timezone)
         from datetime import timezone
@@ -790,12 +801,15 @@ async def publish_sensor(entity_id: str, state, attributes: dict = None):
         state: Sensor state value
         attributes: Sensor attributes dictionary
     """
-    logger.debug(f"[SENSOR] Publishing {entity_id}: {state}")
+    # Use INFO level for purchase-related sensors
+    log_level = logger.info if "purchase" in entity_id or "latest" in entity_id else logger.debug
+    
+    log_level(f"[SENSOR] Publishing {entity_id}: {state}")
     
     # Try MQTT first if enabled
     if config["use_mqtt"] and mqtt_client and mqtt_client.connected:
         try:
-            logger.debug(f"[SENSOR] Using MQTT for {entity_id}")
+            log_level(f"[SENSOR] Using MQTT for {entity_id}")
             success = await publish_sensor_mqtt(
                 mqtt_client=mqtt_client,
                 entity_id=entity_id,
@@ -804,7 +818,7 @@ async def publish_sensor(entity_id: str, state, attributes: dict = None):
                 attributes=attributes
             )
             if success:
-                logger.debug(f"[SENSOR] Published via MQTT: {entity_id}")
+                log_level(f"[SENSOR] Published via MQTT: {entity_id}")
                 return
             else:
                 logger.warning(f"[SENSOR] MQTT publish failed for {entity_id}, falling back to REST API")
@@ -820,7 +834,7 @@ async def publish_sensor(entity_id: str, state, attributes: dict = None):
     
     # Add addon_ prefix to prevent conflicts with integration
     addon_entity_id = f"addon_{config['username']}_{entity_id}"
-    logger.debug(f"[SENSOR] Using REST API for {addon_entity_id}")
+    log_level(f"[SENSOR] Using REST API for {addon_entity_id}")
 
     url = f"{config['ha_url']}/api/states/sensor.{addon_entity_id}"
     headers = {
@@ -838,7 +852,7 @@ async def publish_sensor(entity_id: str, state, attributes: dict = None):
                 if resp.status not in [200, 201]:
                     logger.error(f"[SENSOR] Failed to publish {addon_entity_id}: {resp.status} - {await resp.text()}")
                 else:
-                    logger.debug(f"[SENSOR] Published via REST API: {addon_entity_id}: {state}")
+                    log_level(f"[SENSOR] Published via REST API: {addon_entity_id}: {state}")
     except Exception as e:
         logger.error(f"[SENSOR] Error publishing {addon_entity_id}: {e}")
 

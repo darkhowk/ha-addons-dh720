@@ -358,6 +358,7 @@ async def publish_sensor_mqtt(
         attributes: Sensor attributes (includes friendly_name, icon, etc.)
     """
     if not mqtt_client or not mqtt_client.connected:
+        _LOGGER.warning(f"MQTT client not available for {entity_id}")
         return False
     
     # Extract metadata from attributes
@@ -374,6 +375,10 @@ async def publish_sensor_mqtt(
     if attributes:
         json_attributes_topic = f"homeassistant/sensor/{TOPIC_PREFIX}_{username}_{entity_id}/attributes"
     
+    # Log for purchase-related sensors
+    if "purchase" in entity_id or "latest" in entity_id:
+        _LOGGER.info(f"Publishing MQTT sensor: {entity_id} = {state}")
+    
     # Publish discovery config (only once, but retained)
     mqtt_client.publish_sensor_discovery(
         sensor_id=entity_id,
@@ -387,9 +392,18 @@ async def publish_sensor_mqtt(
     )
     
     # Publish state
-    return mqtt_client.publish_sensor_state(
+    result = mqtt_client.publish_sensor_state(
         sensor_id=entity_id,
         username=username,
         state=state,
         attributes=attributes
     )
+    
+    if "purchase" in entity_id or "latest" in entity_id:
+        if result:
+            _LOGGER.info(f"MQTT sensor published successfully: {entity_id}")
+        else:
+            _LOGGER.error(f"MQTT sensor publish failed: {entity_id}")
+    
+    return result
+
