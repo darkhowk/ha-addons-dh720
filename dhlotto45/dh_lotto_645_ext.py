@@ -67,32 +67,48 @@ async def get_lotto645_winning_details(round_no: Optional[int] = None) -> Lotto6
         params["drwNo"] = round_no
     
     try:
-        # Use proper headers to avoid redirects
+        # Use comprehensive headers to avoid bot detection
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Accept": "application/json, text/javascript, */*; q=0.01",
-            "Referer": "https://www.dhlottery.co.kr/",
+            "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Referer": "https://www.dhlottery.co.kr/gameResult.do?method=byWin",
+            "X-Requested-With": "XMLHttpRequest",
+            "Connection": "keep-alive",
+            "Sec-Fetch-Dest": "empty",
+            "Sec-Fetch-Mode": "cors",
+            "Sec-Fetch-Site": "same-origin",
         }
         
+        timeout = aiohttp.ClientTimeout(total=10)
         connector = aiohttp.TCPConnector(ssl=False)
-        async with aiohttp.ClientSession(connector=connector, headers=headers) as session:
-            async with session.get(PUBLIC_API_URL, params=params, allow_redirects=False) as resp:
-                _LOGGER.debug(f"Lotto 645 ext API response: {resp.status}, URL: {resp.url}")
+        
+        async with aiohttp.ClientSession(connector=connector, headers=headers, timeout=timeout) as session:
+            # Allow redirects and follow them
+            async with session.get(PUBLIC_API_URL, params=params, allow_redirects=True) as resp:
+                final_url = str(resp.url)
+                _LOGGER.debug(f"Lotto 645 ext API: status={resp.status}, final_url={final_url}")
                 
                 if resp.status != 200:
                     raise Exception(f"API request failed: {resp.status}")
                 
                 # Check content type
                 content_type = resp.headers.get('Content-Type', '')
-                if 'application/json' not in content_type and 'text/javascript' not in content_type:
-                    text = await resp.text()
-                    _LOGGER.error(f"Unexpected content type: {content_type}, response: {text[:200]}")
-                    raise Exception(f"API returned non-JSON response (Content-Type: {content_type})")
+                _LOGGER.debug(f"Content-Type: {content_type}")
                 
-                data = await resp.json()
+                # Try to parse as JSON
+                try:
+                    data = await resp.json()
+                except Exception as json_error:
+                    # If JSON parsing fails, log the response
+                    text = await resp.text()
+                    _LOGGER.error(f"Failed to parse JSON. Content-Type: {content_type}, Response: {text[:500]}")
+                    raise Exception(f"API returned non-JSON response: {json_error}")
                 
                 if data.get("returnValue") != "success":
-                    raise Exception(f"API returned error: {data}")
+                    _LOGGER.error(f"API returned error: {data}")
+                    raise Exception(f"API returned error: {data.get('returnValue', 'unknown')}")
                 
                 # Parse response
                 return Lotto645WinningDetails(

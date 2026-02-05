@@ -251,6 +251,8 @@ class MQTTDiscovery:
         name: str,
         command_topic: str,
         username: str,
+        device_name: str,
+        device_identifier: str,
         icon: Optional[str] = None,
         device_class: Optional[str] = None,
     ) -> bool:
@@ -262,6 +264,8 @@ class MQTTDiscovery:
             name: Friendly name
             command_topic: MQTT topic for commands
             username: DH Lottery username
+            device_name: Device name (e.g., "DH Lottery Lotto 645 (ng410808)")
+            device_identifier: Device identifier (e.g., "dhlotto_ng410808_lotto645")
             icon: Icon (e.g., 'mdi:ticket-confirmation')
             device_class: Device class (e.g., 'restart')
         """
@@ -284,8 +288,8 @@ class MQTTDiscovery:
             "object_id": object_id,
             "command_topic": command_topic,
             "device": {
-                "identifiers": [f"{TOPIC_PREFIX}_{username}"],
-                "name": f"DH Lottery ({username})",
+                "identifiers": [device_identifier],
+                "name": device_name,
                 "manufacturer": "DH Lottery",
                 "model": "Add-on",
                 "sw_version": "0.5.3",
@@ -323,7 +327,7 @@ class MQTTDiscovery:
             return False
         
         # Subscribe to each button command topic individually
-        button_ids = ["buy_auto_1", "buy_auto_5"]
+        button_ids = ["buy_auto_1", "buy_auto_5", "buy_pension_1", "buy_pension_5"]
         
         try:
             self.client.on_message = callback

@@ -136,72 +136,90 @@ async def register_buttons():
     username = config["username"]
     logger.info(f"[BUTTON] Registering button entities for user: {username}")
     
-    # Button 1: Buy 1 Auto Game
+    # ===== Lotto 6/45 Buttons (Device 1) =====
+    lotto645_device_name = f"DH Lottery Lotto 645 ({username})"
+    lotto645_device_id = f"dhlotto_{username}_lotto645"
+    
+    # Button 1: Buy 1 Auto Game (Lotto 6/45)
     button1_topic = f"homeassistant/button/dhlotto_{username}_buy_auto_1/command"
-    logger.info(f"[BUTTON] Button 1 command topic: {button1_topic}")
+    logger.info(f"[BUTTON] Lotto 645 Button 1 command topic: {button1_topic}")
     
     success1 = mqtt_client.publish_button_discovery(
         button_id="buy_auto_1",
         name="Buy 1 Auto Game",
         command_topic=button1_topic,
         username=username,
+        device_name=lotto645_device_name,
+        device_identifier=lotto645_device_id,
         icon="mdi:ticket-confirmation",
     )
     if success1:
-        logger.info("[BUTTON] Button registered: buy_auto_1")
+        logger.info("[BUTTON] Lotto 645 button registered: buy_auto_1")
     else:
-        logger.error("[BUTTON] Failed to register button: buy_auto_1")
+        logger.error("[BUTTON] Failed to register Lotto 645 button: buy_auto_1")
     
-    # Button 2: Buy 5 Auto Games (Max)
+    # Button 2: Buy 5 Auto Games (Lotto 6/45, Max)
     button2_topic = f"homeassistant/button/dhlotto_{username}_buy_auto_5/command"
-    logger.info(f"[BUTTON] Button 2 command topic: {button2_topic}")
+    logger.info(f"[BUTTON] Lotto 645 Button 2 command topic: {button2_topic}")
     
     success2 = mqtt_client.publish_button_discovery(
         button_id="buy_auto_5",
         name="Buy 5 Auto Games",
         command_topic=button2_topic,
         username=username,
+        device_name=lotto645_device_name,
+        device_identifier=lotto645_device_id,
         icon="mdi:ticket-confirmation-outline",
     )
     if success2:
-        logger.info("[BUTTON] Button registered: buy_auto_5")
+        logger.info("[BUTTON] Lotto 645 button registered: buy_auto_5")
     else:
-        logger.error("[BUTTON] Failed to register button: buy_auto_5")
+        logger.error("[BUTTON] Failed to register Lotto 645 button: buy_auto_5")
+    
+    # ===== Pension Lottery 720+ Buttons (Device 2) =====
+    pension_device_name = f"DH Lottery Pension 720 ({username})"
+    pension_device_id = f"dhlotto_{username}_pension720"
     
     # Button 3: Buy 1 Pension Lottery
     button3_topic = f"homeassistant/button/dhlotto_{username}_buy_pension_1/command"
-    logger.info(f"[BUTTON] Button 3 command topic: {button3_topic}")
+    logger.info(f"[BUTTON] Pension 720 Button 1 command topic: {button3_topic}")
     
     success3 = mqtt_client.publish_button_discovery(
         button_id="buy_pension_1",
         name="Buy 1 Pension Lottery",
         command_topic=button3_topic,
         username=username,
+        device_name=pension_device_name,
+        device_identifier=pension_device_id,
         icon="mdi:cash-multiple",
     )
     if success3:
-        logger.info("[BUTTON] Button registered: buy_pension_1")
+        logger.info("[BUTTON] Pension 720 button registered: buy_pension_1")
     else:
-        logger.error("[BUTTON] Failed to register button: buy_pension_1")
+        logger.error("[BUTTON] Failed to register Pension 720 button: buy_pension_1")
     
     # Button 4: Buy 5 Pension Lotteries (Max)
     button4_topic = f"homeassistant/button/dhlotto_{username}_buy_pension_5/command"
-    logger.info(f"[BUTTON] Button 4 command topic: {button4_topic}")
+    logger.info(f"[BUTTON] Pension 720 Button 2 command topic: {button4_topic}")
     
     success4 = mqtt_client.publish_button_discovery(
         button_id="buy_pension_5",
         name="Buy 5 Pension Lotteries",
         command_topic=button4_topic,
         username=username,
+        device_name=pension_device_name,
+        device_identifier=pension_device_id,
         icon="mdi:cash-check",
     )
     if success4:
-        logger.info("[BUTTON] Button registered: buy_pension_5")
+        logger.info("[BUTTON] Pension 720 button registered: buy_pension_5")
     else:
-        logger.error("[BUTTON] Failed to register button: buy_pension_5")
+        logger.error("[BUTTON] Failed to register Pension 720 button: buy_pension_5")
     
     if success1 and success2 and success3 and success4:
         logger.info("[BUTTON] All button entities registered successfully")
+        logger.info(f"[BUTTON] Lotto 645 device: {lotto645_device_name}")
+        logger.info(f"[BUTTON] Pension 720 device: {pension_device_name}")
     else:
         logger.warning("[BUTTON] Some buttons failed to register")
 
