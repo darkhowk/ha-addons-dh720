@@ -1,6 +1,6 @@
 {
   "name": "DH Lotto 45",
-  "version": "0.4.9",
+  "version": "0.5.0",
   "slug": "dhlotto45",
   "description": "동행복권 로또 6/45 통합 애드온 (MQTT Discovery 지원)",
   "url": "https://github.com/redchupa/ha-addons-dhlottery",
