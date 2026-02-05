@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.7.3] - 2025-02-05
 
-### 🎨 Changed
+### Changed
 - **한국어 센서 이름**: 모든 센서 및 버튼의 Friendly Name을 한국어로 변경
   - "DH Lottery Balance" → "동행복권 예치금"
   - "Lotto 645 Winning Numbers" → "로또 645 당첨번호"
@@ -22,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.7.0] - 2025-02-04
 
-### ✨ Added
+### Added
 - **MQTT Discovery 지원**: Home Assistant와 자동 통합
   - 센서 자동 등록
   - 버튼 엔티티 생성 (1게임/5게임 자동 구매)
@@ -33,7 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 버튼 클릭만으로 간편하게 구매
   - 구매 후 센서 자동 업데이트
 
-### 🔧 Improved
+### Improved
 - **로그인 안정성**: RSA 암호화 및 세션 관리 개선
 - **에러 처리**: 더 명확한 에러 메시지 및 로깅
 - **센서 업데이트**: 구매 후 즉시 센서 업데이트
@@ -42,12 +42,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.6.8] - 2025-01-28
 
-### ✨ Added
+### Added
 - **번호 통계 분석**: Hot/Cold 번호, 출현 빈도 분석 센서
 - **구매 통계**: 총 구매 금액, 당첨률, 수익률 센서
 - **구매 내역**: 최근 구매 게임 1-5 개별 센서
 
-### 🔧 Improved
+### Improved
 - **로그인 개선**: User-Agent 로테이션, Circuit Breaker 추가
 - **안정성 향상**: 연속 실패 방지 로직 추가
 
@@ -55,12 +55,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.6.0] - 2025-01-20
 
-### ✨ Added
+### Added
 - **REST API**: 로또 구매, 통계 조회, 랜덤 번호 생성 API
 - **Swagger UI**: API 테스트 인터페이스 (`/docs`)
 - **Web UI**: 간단한 웹 인터페이스 제공
 
-### 🔧 Improved
+### Improved
 - **센서 업데이트**: 주기적 자동 업데이트 (기본 1시간)
 - **예치금 관리**: 구매 가능 금액 자동 체크
 
@@ -68,12 +68,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.5.0] - 2025-01-15
 
-### ✨ Added
+### Added
 - **자동 구매 기능**: 로또 6/45 자동 구매 (1-5게임)
 - **구매 제한**: 시간 및 주간 게임 수 자동 체크
 - **Home Assistant 센서**: 예치금, 당첨번호, 회차 정보 센서
 
-### 🔧 Initial Features
+### Initial Features
 - 동행복권 로그인 및 세션 관리
 - 최신 당첨번호 조회
 - 예치금 조회
