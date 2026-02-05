@@ -1,6 +1,19 @@
-# DH Lottery 6/45 애드온 문서
+# DH Lottery Home Assistant Add-ons
 
 Home Assistant에서 동행복권 로또 6/45를 자동으로 구매하고 분석할 수 있는 애드온입니다.
+
+## 주요 기능
+
+-  **자동 구매**: 버튼 클릭만으로 로또 자동 구매
+-  **실시간 분석**: 당첨번호, 상금, 통계 정보 자동 업데이트
+-  **자동화 연동**: Home Assistant 자동화와 완벽하게 통합
+-  **통계 분석**: Hot/Cold 번호, 출현 빈도 분석
+-  **예치금 관리**: 잔액 및 구매 가능 금액 모니터링
+-  **MQTT Discovery**: Home Assistant와 자동 통합
+-  **REST API**: 외부 앱에서도 사용 가능
+-  **모바일 알림**: 구매 완료, 당첨번호 발표 등 자동 알림
+
+---
 
 ## 목차
 
@@ -10,6 +23,8 @@ Home Assistant에서 동행복권 로또 6/45를 자동으로 구매하고 분�
 - [자동화 예시](#자동화-예시)
 - [REST API](#rest-api)
 - [문제 해결](#문제-해결)
+- [후원](#후원)
+- [라이선스](#라이선스)
 
 ---
 
@@ -51,81 +66,75 @@ mqtt_password: ""  # MQTT 비밀번호 (선택사항)
 애드온을 시작하면 다음 센서들이 자동으로 생성됩니다.
 
 <details>
-<summary><b>1. 계정 정보 센서</b></summary>
+<summary><b>계정 정보 센서</b></summary>
 
 ### 동행복권 예치금
 - **센서 ID**: `sensor.dhlotto_{username}_lotto45_balance`
-- **표시 이름**: 동행복권 예치금
-- **설명**: 현재 예치금 총액
 - **단위**: KRW
-
-#### 추가 속성
-- `purchase_available`: 구매 가능 금액
-- `reservation_purchase`: 예약 구매 금액
-- `withdrawal_request`: 출금 신청 중 금액
-- `this_month_accumulated`: 이번 달 누적 구매 금액
+- **추가 속성**:
+  - `purchase_available`: 구매 가능 금액
+  - `reservation_purchase`: 예약 구매 금액
+  - `withdrawal_request`: 출금 신청 중 금액
+  - `this_month_accumulated`: 이번 달 누적 구매 금액
 
 </details>
 
 <details>
-<summary><b>2. 로또 당첨 결과 센서</b></summary>
+<summary><b>로또 당첨 결과 센서</b></summary>
 
 ### 기본 정보
-- `sensor.dhlotto_{username}_lotto645_round` - 로또 645 회차 (최신 회차 번호)
-- `sensor.dhlotto_{username}_lotto645_draw_date` - 로또 645 추첨일 (YYYY-MM-DD)
-- `sensor.dhlotto_{username}_lotto645_winning_numbers` - 로또 645 당첨번호 (전체 당첨번호)
-  - 예시: "1145회, 5, 12, 18, 27, 33, 41 + 9"
+- `sensor.dhlotto_{username}_lotto645_round` - 최신 회차 번호
+- `sensor.dhlotto_{username}_lotto645_draw_date` - 추첨일 (YYYY-MM-DD)
+- `sensor.dhlotto_{username}_lotto645_winning_numbers` - 전체 당첨번호
 
 ### 당첨번호 (개별)
-- `sensor.dhlotto_{username}_lotto645_number1` - 로또 645 번호 1 (당첨번호 1)
-- `sensor.dhlotto_{username}_lotto645_number2` - 로또 645 번호 2 (당첨번호 2)
-- `sensor.dhlotto_{username}_lotto645_number3` - 로또 645 번호 3 (당첨번호 3)
-- `sensor.dhlotto_{username}_lotto645_number4` - 로또 645 번호 4 (당첨번호 4)
-- `sensor.dhlotto_{username}_lotto645_number5` - 로또 645 번호 5 (당첨번호 5)
-- `sensor.dhlotto_{username}_lotto645_number6` - 로또 645 번호 6 (당첨번호 6)
-- `sensor.dhlotto_{username}_lotto645_bonus` - 로또 645 보너스 (보너스 번호)
+- `sensor.dhlotto_{username}_lotto645_number1` ~ `number6` - 당첨번호 1~6
+- `sensor.dhlotto_{username}_lotto645_bonus` - 보너스 번호
 
 </details>
 
 <details>
-<summary><b>3. 상금 및 당첨자 정보 센서</b></summary>
+<summary><b>상금 및 당첨자 정보 센서</b></summary>
 
 ### 총 판매액
-- `sensor.dhlotto_{username}_lotto645_total_sales` - 로또 645 총 판매액 (해당 회차 총 판매액, KRW)
+- `sensor.dhlotto_{username}_lotto645_total_sales` (KRW)
 
-### 1등 정보
-- `sensor.dhlotto_{username}_lotto645_first_prize` - 로또 645 1등 상금 (1인당, KRW)
-- `sensor.dhlotto_{username}_lotto645_first_winners` - 로또 645 1등 당첨자 (1등 당첨자 수, 명)
+### 등수별 정보
+각 등수마다 **상금**과 **당첨자** 센서가 생성됩니다:
 
-### 2등 정보
-- `sensor.dhlotto_{username}_lotto645_second_prize` - 로또 645 2등 상금 (1인당, KRW)
-- `sensor.dhlotto_{username}_lotto645_second_winners` - 로또 645 2등 당첨자 (2등 당첨자 수, 명)
+**1등**
+- `sensor.dhlotto_{username}_lotto645_first_prize` - 1등 상금 (1인당, KRW)
+- `sensor.dhlotto_{username}_lotto645_first_winners` - 1등 당첨자 수 (명)
 
-### 3등 정보
-- `sensor.dhlotto_{username}_lotto645_third_prize` - 로또 645 3등 상금 (1인당, KRW)
-- `sensor.dhlotto_{username}_lotto645_third_winners` - 로또 645 3등 당첨자 (3등 당첨자 수, 명)
+**2등**
+- `sensor.dhlotto_{username}_lotto645_second_prize` - 2등 상금 (KRW)
+- `sensor.dhlotto_{username}_lotto645_second_winners` - 2등 당첨자 (명)
 
-### 4등 정보
-- `sensor.dhlotto_{username}_lotto645_fourth_prize` - 로또 645 4등 상금 (1인당, KRW)
-- `sensor.dhlotto_{username}_lotto645_fourth_winners` - 로또 645 4등 당첨자 (4등 당첨자 수, 명)
+**3등**
+- `sensor.dhlotto_{username}_lotto645_third_prize` - 3등 상금 (KRW)
+- `sensor.dhlotto_{username}_lotto645_third_winners` - 3등 당첨자 (명)
 
-### 5등 정보
-- `sensor.dhlotto_{username}_lotto645_fifth_prize` - 로또 645 5등 상금 (1인당, KRW)
-- `sensor.dhlotto_{username}_lotto645_fifth_winners` - 로또 645 5등 당첨자 (5등 당첨자 수, 명)
+**4등**
+- `sensor.dhlotto_{username}_lotto645_fourth_prize` - 4등 상금 (KRW)
+- `sensor.dhlotto_{username}_lotto645_fourth_winners` - 4등 당첨자 (명)
 
-### 전체 당첨자
-- `sensor.dhlotto_{username}_lotto645_total_winners` - 로또 645 총 당첨자 (전체 당첨자 수 1~5등, 명)
+**5등**
+- `sensor.dhlotto_{username}_lotto645_fifth_prize` - 5등 상금 (KRW)
+- `sensor.dhlotto_{username}_lotto645_fifth_winners` - 5등 당첨자 (명)
+
+**전체**
+- `sensor.dhlotto_{username}_lotto645_total_winners` - 총 당첨자 수 (1~5등, 명)
 
 </details>
 
 <details>
-<summary><b>4. 번호 통계 분석 센서</b></summary>
+<summary><b>번호 통계 분석 센서</b></summary>
 
 ### 통계 센서
-- `sensor.dhlotto_{username}_lotto45_top_frequency_number` - 로또 45 최다 출현 번호 (최근 50회차 중 가장 많이 나온 번호, 회)
-- `sensor.dhlotto_{username}_lotto45_hot_numbers` - 로또 45 핫 넘버 (최근 20회차 중 자주 나온 번호 상위 10개)
-- `sensor.dhlotto_{username}_lotto45_cold_numbers` - 로또 45 콜드 넘버 (최근 20회차 중 적게 나온 번호 하위 10개)
-- `sensor.dhlotto_{username}_lotto45_total_winning` - 로또 45 총 당첨금 (최근 1년 총 당첨금, KRW)
+- `sensor.dhlotto_{username}_lotto45_top_frequency_number` - 최다 출현 번호 (최근 50회차)
+- `sensor.dhlotto_{username}_lotto45_hot_numbers` - 핫 넘버 (최근 20회차 상위 10개)
+- `sensor.dhlotto_{username}_lotto45_cold_numbers` - 콜드 넘버 (최근 20회차 하위 10개)
+- `sensor.dhlotto_{username}_lotto45_total_winning` - 총 당첨금 (최근 1년, KRW)
 
 ### total_winning 추가 속성
 - `total_purchase`: 총 구매 금액
@@ -138,18 +147,14 @@ mqtt_password: ""  # MQTT 비밀번호 (선택사항)
 </details>
 
 <details>
-<summary><b>5. 구매 내역 센서</b></summary>
+<summary><b>구매 내역 센서</b></summary>
 
 ### 구매 정보
-- `sensor.dhlotto_{username}_lotto45_latest_purchase` - 최근 구매 (가장 최근 구매 정보)
-- `sensor.dhlotto_{username}_lotto45_purchase_history_count` - 구매 기록 수 (최근 1주일 구매 기록 수)
+- `sensor.dhlotto_{username}_lotto45_latest_purchase` - 가장 최근 구매 정보
+- `sensor.dhlotto_{username}_lotto45_purchase_history_count` - 구매 기록 수 (최근 1주일)
 
 ### 게임별 센서
-- `sensor.dhlotto_{username}_lotto45_game_1` - 게임 1 (구매한 게임 1 번호)
-- `sensor.dhlotto_{username}_lotto45_game_2` - 게임 2 (구매한 게임 2 번호)
-- `sensor.dhlotto_{username}_lotto45_game_3` - 게임 3 (구매한 게임 3 번호)
-- `sensor.dhlotto_{username}_lotto45_game_4` - 게임 4 (구매한 게임 4 번호)
-- `sensor.dhlotto_{username}_lotto45_game_5` - 게임 5 (구매한 게임 5 번호)
+- `sensor.dhlotto_{username}_lotto45_game_1` ~ `game_5` - 구매한 게임 1~5 번호
 
 ### latest_purchase 추가 속성
 - `round_no`: 구매 회차
@@ -158,7 +163,7 @@ mqtt_password: ""  # MQTT 비밀번호 (선택사항)
 - `games`: 구매한 게임 목록
 - `games_count`: 구매한 게임 수
 
-### game_1~5 추가 속성
+### game 추가 속성
 - `slot`: 슬롯 번호 (A, B, C, D, E)
 - `mode`: 구매 모드 (자동, 수동, 반자동)
 - `numbers`: 번호 리스트
@@ -168,9 +173,9 @@ mqtt_password: ""  # MQTT 비밀번호 (선택사항)
 </details>
 
 <details>
-<summary><b>6. 시스템 센서</b></summary>
+<summary><b>시스템 센서</b></summary>
 
-- `sensor.dhlotto_{username}_lotto45_last_update` - 마지막 업데이트 (센서 마지막 업데이트 시간)
+- `sensor.dhlotto_{username}_lotto45_last_update` - 마지막 업데이트 시간
 
 </details>
 
@@ -181,16 +186,8 @@ mqtt_password: ""  # MQTT 비밀번호 (선택사항)
 MQTT Discovery를 활성화하면 자동 구매 버튼이 생성됩니다.
 
 ### 자동 구매 버튼
-
-**1게임 자동 구매**
-- **버튼 ID**: `button.dhlotto_{username}_buy_auto_1`
-- **표시 이름**: 1게임 자동 구매
-- **설명**: 자동 번호로 1게임 구매
-
-**5게임 자동 구매**
-- **버튼 ID**: `button.dhlotto_{username}_buy_auto_5`
-- **표시 이름**: 5게임 자동 구매
-- **설명**: 자동 번호로 5게임 구매 (주간 최대)
+- `button.dhlotto_{username}_buy_auto_1` - 1게임 자동 구매
+- `button.dhlotto_{username}_buy_auto_5` - 5게임 자동 구매 (주간 최대)
 
 ### 사용 방법
 - 버튼을 누르면 자동으로 로또를 구매합니다
@@ -203,215 +200,12 @@ MQTT Discovery를 활성화하면 자동 구매 버튼이 생성됩니다.
 
 ---
 
-## 자동화 예시
+## 대쉬보드 카드 및 자동화 예시
 
-### 1. 예치금 부족 알림
+깃허브에 첨부된 로또 대쉬보드 카드.yaml 및 로또 당첨 결과 알림 자동화.yaml를 복붙해서 쓰세요
 
-예치금이 5,000원 미만일 때 알림을 받습니다.
 
-```yaml
-alias: "로또 예치금 부족 알림"
-description: "예치금이 5,000원 미만일 때 알림"
-trigger:
-  - platform: numeric_state
-    entity_id: sensor.dhlotto_ng410808_lotto45_balance
-    below: 5000
-action:
-  - service: notify.mobile_app
-    data:
-      title: "로또 예치금 부족"
-      message: "현재 예치금: {{ states('sensor.dhlotto_ng410808_lotto45_balance') }}원"
-mode: single
-```
 
-### 2. 매주 자동 구매
-
-매주 토요일 저녁 7시에 자동으로 5게임을 구매합니다.
-
-```yaml
-alias: "로또 매주 자동 구매"
-description: "매주 토요일 저녁 7시에 5게임 자동 구매"
-trigger:
-  - platform: time
-    at: "19:00:00"
-condition:
-  - condition: time
-    weekday:
-      - sat
-action:
-  - service: button.press
-    target:
-      entity_id: button.dhlotto_ng410808_buy_auto_5
-  - service: notify.mobile_app
-    data:
-      title: "로또 자동 구매 완료"
-      message: "5게임 구매가 완료되었습니다."
-mode: single
-```
-
-### 3. 당첨번호 발표 알림
-
-매주 토요일 밤 8시 30분에 당첨번호를 알림으로 받습니다.
-
-```yaml
-alias: "로또 당첨번호 알림"
-description: "매주 토요일 밤 8시 30분에 당첨번호 발표"
-trigger:
-  - platform: time
-    at: "20:30:00"
-condition:
-  - condition: time
-    weekday:
-      - sat
-action:
-  - delay:
-      minutes: 5
-  - service: homeassistant.update_entity
-    target:
-      entity_id: sensor.dhlotto_ng410808_lotto645_winning_numbers
-  - delay:
-      seconds: 10
-  - service: notify.mobile_app
-    data:
-      title: "로또 당첨번호 발표"
-      message: >
-        {{ states('sensor.dhlotto_ng410808_lotto645_winning_numbers') }}
-        
-        1등 상금: {{ states('sensor.dhlotto_ng410808_lotto645_first_prize') | int | round(0) }}원
-        1등 당첨자: {{ states('sensor.dhlotto_ng410808_lotto645_first_winners') }}명
-mode: single
-```
-
-### 4. 고액 당첨 알림
-
-1등 상금이 10억원 이상일 때 알림을 받습니다.
-
-```yaml
-alias: "로또 고액 당첨 알림"
-description: "1등 상금이 10억원 이상일 때 알림"
-trigger:
-  - platform: numeric_state
-    entity_id: sensor.dhlotto_ng410808_lotto645_first_prize
-    above: 1000000000
-action:
-  - service: notify.mobile_app
-    data:
-      title: "로또 고액 당첨!"
-      message: >
-        이번 주 1등 상금: {{ (states('sensor.dhlotto_ng410808_lotto645_first_prize') | int / 100000000) | round(1) }}억원!
-        당첨자: {{ states('sensor.dhlotto_ng410808_lotto645_first_winners') }}명
-mode: single
-```
-
-### 5. 핫 넘버 기반 자동 구매
-
-핫 넘버가 업데이트되면 알림을 받습니다.
-
-```yaml
-alias: "로또 핫 넘버 업데이트 알림"
-description: "핫 넘버 정보가 업데이트되면 알림"
-trigger:
-  - platform: state
-    entity_id: sensor.dhlotto_ng410808_lotto45_hot_numbers
-action:
-  - service: notify.mobile_app
-    data:
-      title: "로또 핫 넘버 업데이트"
-      message: >
-        최근 자주 나온 번호:
-        {{ states('sensor.dhlotto_ng410808_lotto45_hot_numbers') }}
-mode: single
-```
-
-### 6. 구매 완료 알림
-
-로또 구매가 완료되면 구매 내역을 알림으로 받습니다.
-
-```yaml
-alias: "로또 구매 완료 알림"
-description: "구매 후 구매 내역 알림"
-trigger:
-  - platform: state
-    entity_id: sensor.dhlotto_ng410808_lotto45_latest_purchase
-action:
-  - service: notify.mobile_app
-    data:
-      title: "로또 구매 완료"
-      message: >
-        회차: {{ state_attr('sensor.dhlotto_ng410808_lotto45_latest_purchase', 'round_no') }}회
-        
-        게임 1: {{ states('sensor.dhlotto_ng410808_lotto45_game_1') }}
-        게임 2: {{ states('sensor.dhlotto_ng410808_lotto45_game_2') }}
-        게임 3: {{ states('sensor.dhlotto_ng410808_lotto45_game_3') }}
-        게임 4: {{ states('sensor.dhlotto_ng410808_lotto45_game_4') }}
-        게임 5: {{ states('sensor.dhlotto_ng410808_lotto45_game_5') }}
-mode: single
-```
-
-### 7. 대시보드 카드 예시
-
-Lovelace 대시보드에 로또 정보를 표시하는 카드 예시입니다.
-
-```yaml
-type: vertical-stack
-cards:
-  - type: entities
-    title: 로또 6/45 당첨번호
-    entities:
-      - entity: sensor.dhlotto_ng410808_lotto645_round
-        name: 회차
-      - entity: sensor.dhlotto_ng410808_lotto645_winning_numbers
-        name: 당첨번호
-      - entity: sensor.dhlotto_ng410808_lotto645_draw_date
-        name: 추첨일
-      - type: divider
-      - entity: sensor.dhlotto_ng410808_lotto645_first_prize
-        name: 1등 상금
-      - entity: sensor.dhlotto_ng410808_lotto645_first_winners
-        name: 1등 당첨자
-  
-  - type: entities
-    title: 내 계정 정보
-    entities:
-      - entity: sensor.dhlotto_ng410808_lotto45_balance
-        name: 예치금
-      - entity: sensor.dhlotto_ng410808_lotto45_total_winning
-        name: 총 당첨금
-      - entity: sensor.dhlotto_ng410808_lotto45_purchase_history_count
-        name: 구매 기록
-  
-  - type: entities
-    title: 빠른 구매
-    entities:
-      - entity: button.dhlotto_ng410808_buy_auto_1
-        name: 1게임 구매
-      - entity: button.dhlotto_ng410808_buy_auto_5
-        name: 5게임 구매
-  
-  - type: entities
-    title: 번호 통계
-    entities:
-      - entity: sensor.dhlotto_ng410808_lotto45_hot_numbers
-        name: 핫 넘버
-      - entity: sensor.dhlotto_ng410808_lotto45_cold_numbers
-        name: 콜드 넘버
-      - entity: sensor.dhlotto_ng410808_lotto45_top_frequency_number
-        name: 최다 출현 번호
-  
-  - type: entities
-    title: 최근 구매 내역
-    entities:
-      - entity: sensor.dhlotto_ng410808_lotto45_game_1
-        name: 게임 1
-      - entity: sensor.dhlotto_ng410808_lotto45_game_2
-        name: 게임 2
-      - entity: sensor.dhlotto_ng410808_lotto45_game_3
-        name: 게임 3
-      - entity: sensor.dhlotto_ng410808_lotto45_game_4
-        name: 게임 4
-      - entity: sensor.dhlotto_ng410808_lotto45_game_5
-        name: 게임 5
-```
 
 ---
 
@@ -422,7 +216,7 @@ cards:
 **베이스 URL:** `http://homeassistant.local:60099`
 
 <details>
-<summary><b>API 엔드포인트</b></summary>
+<summary><b>API 엔드포인트 목록</b></summary>
 
 ### 조회 API (GET)
 - `/health` - 상태 확인
@@ -556,6 +350,25 @@ Swagger UI를 통해 API를 테스트할 수 있습니다:
 
 ---
 
+## 후원
+
+이 애드온이 유용하셨다면 커피 한 잔 후원 부탁드립니다!
+
+<table>
+  <tr>
+    <td align="center">
+      <b>Toss (토스)</b><br>
+      <img src="https://raw.githubusercontent.com/redchupa/ha-addons-dhlottery/main/images/toss-donation.png" width="200">
+    </td>
+    <td align="center">
+      <b>PayPal</b><br>
+      <img src="https://raw.githubusercontent.com/redchupa/ha-addons-dhlottery/main/images/paypal-donation.png" width="200">
+    </td>
+  </tr>
+</table>
+
+---
+
 ## 지원 및 문의
 
 문제가 발생하거나 제안이 있으시면:
@@ -567,7 +380,7 @@ Swagger UI를 통해 API를 테스트할 수 있습니다:
 
 ## 라이선스
 
-MIT License
+MIT License - 자세한 내용은 [LICENSE](LICENSE) 파일을 참고하세요.
 
 ---
 
@@ -575,3 +388,19 @@ MIT License
 
 본 애드온은 동행복권과 공식적인 관계가 없는 개인 프로젝트입니다.
 사용자의 책임 하에 사용하시기 바랍니다.
+
+---
+
+## 기여
+
+이 프로젝트에 기여하고 싶으시다면:
+
+1. 이 저장소를 Fork 하세요
+2. Feature 브랜치를 생성하세요 (`git checkout -b feature/AmazingFeature`)
+3. 변경사항을 커밋하세요 (`git commit -m 'Add some AmazingFeature'`)
+4. 브랜치에 Push 하세요 (`git push origin feature/AmazingFeature`)
+5. Pull Request를 생성하세요
+
+---
+
+**Made with ❤️ for Home Assistant Community**
