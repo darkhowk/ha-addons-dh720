@@ -108,13 +108,13 @@ def _translate_result(result: str) -> str:
     
     # Korean to English mapping
     translations = {
-        "ÃƒÂ«Ã‚Â¯Ã‚Â¸ÃƒÂ¬Ã‚Â¶Ã¢â‚¬ÂÃƒÂ¬Ã‚Â²Ã‚Â¨": "Pending",
-        "ÃƒÂ«Ã¢â‚¬Å¡Ã¢â€žÂ¢ÃƒÂ¬Ã‚Â²Ã‚Â¨": "No Win",
-        "1ÃƒÂ«Ã¢â‚¬Å“Ã‚Â±": "1st Prize",
-        "2ÃƒÂ«Ã¢â‚¬Å“Ã‚Â±": "2nd Prize",
-        "3ÃƒÂ«Ã¢â‚¬Å“Ã‚Â±": "3rd Prize",
-        "4ÃƒÂ«Ã¢â‚¬Å“Ã‚Â±": "4th Prize",
-        "5ÃƒÂ«Ã¢â‚¬Å“Ã‚Â±": "5th Prize",
+        "ÃƒÆ’Ã‚Â«Ãƒâ€šÃ‚Â¯Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã‚Â¬Ãƒâ€šÃ‚Â¶ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÆ’Ã‚Â¬Ãƒâ€šÃ‚Â²Ãƒâ€šÃ‚Â¨": "Pending",
+        "ÃƒÆ’Ã‚Â«ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã‚Â¬Ãƒâ€šÃ‚Â²Ãƒâ€šÃ‚Â¨": "No Win",
+        "1ÃƒÆ’Ã‚Â«ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€šÃ‚Â±": "1st Prize",
+        "2ÃƒÆ’Ã‚Â«ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€šÃ‚Â±": "2nd Prize",
+        "3ÃƒÆ’Ã‚Â«ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€šÃ‚Â±": "3rd Prize",
+        "4ÃƒÆ’Ã‚Â«ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€šÃ‚Â±": "4th Prize",
+        "5ÃƒÆ’Ã‚Â«ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€šÃ‚Â±": "5th Prize",
     }
     
     for korean, english in translations.items():
@@ -134,7 +134,7 @@ async def register_buttons():
     logger.info(f"[BUTTON] Registering button entities for user: {username}")
     
     # Lotto 6/45 buttons only - using main device
-    main_device_name = f"동행복권 애드온 ({username})"
+    main_device_name = f"ë™í–‰ë³µê¶Œ ì• ë“œì˜¨ ({username})"
     main_device_id = f"dhlotto_addon_{username}"
     
     # Button 1: Buy 1 Auto Game (Lotto 6/45)
@@ -143,7 +143,7 @@ async def register_buttons():
     
     success1 = mqtt_client.publish_button_discovery(
         button_id="buy_auto_1",
-        name="1게임 자동 구매",
+        name="1ê²Œìž„ ìžë™ êµ¬ë§¤",
         command_topic=button1_topic,
         username=username,
         device_name=main_device_name,
@@ -161,7 +161,7 @@ async def register_buttons():
     
     success2 = mqtt_client.publish_button_discovery(
         button_id="buy_auto_5",
-        name="5게임 자동 구매",
+        name="5ê²Œìž„ ìžë™ êµ¬ë§¤",
         command_topic=button2_topic,
         username=username,
         device_name=main_device_name,
@@ -280,7 +280,7 @@ async def execute_button_purchase(button_id: str):
             "error": str(e),
             "button_id": button_id,
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "friendly_name": "구매 오류",
+            "friendly_name": "êµ¬ë§¤ ì˜¤ë¥˜",
             "icon": "mdi:alert-circle",
         }
         
@@ -642,7 +642,7 @@ async def update_sensors():
             "withdrawal_request": balance.withdrawal_request,
             "this_month_accumulated": balance.this_month_accumulated_purchase,
             "unit_of_measurement": "KRW",
-            "friendly_name": "동행복권 예치금",
+            "friendly_name": "ë™í–‰ë³µê¶Œ ì˜ˆì¹˜ê¸ˆ",
             "icon": "mdi:wallet",
         })
         
@@ -683,20 +683,20 @@ async def update_sensors():
                 
                 # Round number
                 await publish_sensor("lotto645_round", _safe_int(result_item.get("ltEpsd")), {
-                    "friendly_name": "로또 645 회차",
+                    "friendly_name": "ë¡œë˜ 645 íšŒì°¨",
                     "icon": "mdi:counter",
                 })
                 
                 # Numbers 1-6
                 for i in range(1, 7):
                     await publish_sensor(f"lotto645_number{i}", _safe_int(result_item.get(f"tm{i}WnNo")), {
-                        "friendly_name": f"로또 645 번호 {i}",
+                        "friendly_name": f"ë¡œë˜ 645 ë²ˆí˜¸ {i}",
                         "icon": f"mdi:numeric-{i}-circle",
                     })
                 
                 # Bonus number
                 await publish_sensor("lotto645_bonus", _safe_int(result_item.get("bnsWnNo")), {
-                    "friendly_name": "로또 645 보너스",
+                    "friendly_name": "ë¡œë˜ 645 ë³´ë„ˆìŠ¤",
                     "icon": "mdi:star-circle",
                 })
                 
@@ -711,13 +711,13 @@ async def update_sensors():
                 ]
                 bonus_number = _safe_int(result_item.get("bnsWnNo"))
                 round_no = _safe_int(result_item.get("ltEpsd"))
-                winning_text = f"{round_no}회, {', '.join(map(str, winning_numbers))} + {bonus_number}"
+                winning_text = f"{round_no}íšŒ, {', '.join(map(str, winning_numbers))} + {bonus_number}"
                 
                 await publish_sensor("lotto645_winning_numbers", winning_text, {
                     "numbers": winning_numbers,
                     "bonus": bonus_number,
                     "round": round_no,
-                    "friendly_name": "로또 645 당첨번호",
+                    "friendly_name": "ë¡œë˜ 645 ë‹¹ì²¨ë²ˆí˜¸",
                     "icon": "mdi:trophy-award",
                 })
                 
@@ -725,7 +725,7 @@ async def update_sensors():
                 draw_date = _parse_yyyymmdd(result_item.get("ltRflYmd"))
                 if draw_date:
                     await publish_sensor("lotto645_draw_date", draw_date, {
-                        "friendly_name": "로또 645 추첨일",
+                        "friendly_name": "ë¡œë˜ 645 ì¶”ì²¨ì¼",
                         "icon": "mdi:calendar",
                         "device_class": "date",
                     })
@@ -733,14 +733,14 @@ async def update_sensors():
                 # ========== Prize Details from Internal API ==========
                 # Total sales
                 await publish_sensor("lotto645_total_sales", _safe_int(item.get("wholEpsdSumNtslAmt")), {
-                    "friendly_name": "로또 645 총 판매액",
+                    "friendly_name": "ë¡œë˜ 645 ì´ íŒë§¤ì•¡",
                     "unit_of_measurement": "KRW",
                     "icon": "mdi:cash-multiple",
                 })
                 
                 # 1st prize
                 await publish_sensor("lotto645_first_prize", _safe_int(item.get("rnk1WnAmt")), {
-                    "friendly_name": "로또 645 1등 상금",
+                    "friendly_name": "ë¡œë˜ 645 1ë“± ìƒê¸ˆ",
                     "unit_of_measurement": "KRW",
                     "total_amount": _safe_int(item.get("rnk1SumWnAmt")),
                     "winners": _safe_int(item.get("rnk1WnNope")),
@@ -748,14 +748,14 @@ async def update_sensors():
                 })
                 
                 await publish_sensor("lotto645_first_winners", _safe_int(item.get("rnk1WnNope")), {
-                    "friendly_name": "로또 645 1등 당첨자",
-                    "unit_of_measurement": "명",
+                    "friendly_name": "ë¡œë˜ 645 1ë“± ë‹¹ì²¨ìž",
+                    "unit_of_measurement": "ëª…",
                     "icon": "mdi:account-multiple",
                 })
                 
                 # 2nd prize
                 await publish_sensor("lotto645_second_prize", _safe_int(item.get("rnk2WnAmt")), {
-                    "friendly_name": "로또 645 2등 상금",
+                    "friendly_name": "ë¡œë˜ 645 2ë“± ìƒê¸ˆ",
                     "unit_of_measurement": "KRW",
                     "total_amount": _safe_int(item.get("rnk2SumWnAmt")),
                     "winners": _safe_int(item.get("rnk2WnNope")),
@@ -763,14 +763,14 @@ async def update_sensors():
                 })
                 
                 await publish_sensor("lotto645_second_winners", _safe_int(item.get("rnk2WnNope")), {
-                    "friendly_name": "로또 645 2등 당첨자",
-                    "unit_of_measurement": "명",
+                    "friendly_name": "ë¡œë˜ 645 2ë“± ë‹¹ì²¨ìž",
+                    "unit_of_measurement": "ëª…",
                     "icon": "mdi:account-multiple-outline",
                 })
                 
                 # 3rd prize
                 await publish_sensor("lotto645_third_prize", _safe_int(item.get("rnk3WnAmt")), {
-                    "friendly_name": "로또 645 3등 상금",
+                    "friendly_name": "ë¡œë˜ 645 3ë“± ìƒê¸ˆ",
                     "unit_of_measurement": "KRW",
                     "total_amount": _safe_int(item.get("rnk3SumWnAmt")),
                     "winners": _safe_int(item.get("rnk3WnNope")),
@@ -778,14 +778,14 @@ async def update_sensors():
                 })
                 
                 await publish_sensor("lotto645_third_winners", _safe_int(item.get("rnk3WnNope")), {
-                    "friendly_name": "로또 645 3등 당첨자",
-                    "unit_of_measurement": "명",
+                    "friendly_name": "ë¡œë˜ 645 3ë“± ë‹¹ì²¨ìž",
+                    "unit_of_measurement": "ëª…",
                     "icon": "mdi:account-group-outline",
                 })
                 
                 # 4th prize
                 await publish_sensor("lotto645_fourth_prize", _safe_int(item.get("rnk4WnAmt")), {
-                    "friendly_name": "로또 645 4등 상금",
+                    "friendly_name": "ë¡œë˜ 645 4ë“± ìƒê¸ˆ",
                     "unit_of_measurement": "KRW",
                     "total_amount": _safe_int(item.get("rnk4SumWnAmt")),
                     "winners": _safe_int(item.get("rnk4WnNope")),
@@ -793,14 +793,14 @@ async def update_sensors():
                 })
                 
                 await publish_sensor("lotto645_fourth_winners", _safe_int(item.get("rnk4WnNope")), {
-                    "friendly_name": "로또 645 4등 당첨자",
-                    "unit_of_measurement": "명",
+                    "friendly_name": "ë¡œë˜ 645 4ë“± ë‹¹ì²¨ìž",
+                    "unit_of_measurement": "ëª…",
                     "icon": "mdi:account-group",
                 })
                 
                 # 5th prize
                 await publish_sensor("lotto645_fifth_prize", _safe_int(item.get("rnk5WnAmt")), {
-                    "friendly_name": "로또 645 5등 상금",
+                    "friendly_name": "ë¡œë˜ 645 5ë“± ìƒê¸ˆ",
                     "unit_of_measurement": "KRW",
                     "total_amount": _safe_int(item.get("rnk5SumWnAmt")),
                     "winners": _safe_int(item.get("rnk5WnNope")),
@@ -808,15 +808,15 @@ async def update_sensors():
                 })
                 
                 await publish_sensor("lotto645_fifth_winners", _safe_int(item.get("rnk5WnNope")), {
-                    "friendly_name": "로또 645 5등 당첨자",
-                    "unit_of_measurement": "명",
+                    "friendly_name": "ë¡œë˜ 645 5ë“± ë‹¹ì²¨ìž",
+                    "unit_of_measurement": "ëª…",
                     "icon": "mdi:account",
                 })
                 
                 # Total winners
                 await publish_sensor("lotto645_total_winners", _safe_int(item.get("sumWnNope")), {
-                    "friendly_name": "로또 645 총 당첨자",
-                    "unit_of_measurement": "명",
+                    "friendly_name": "ë¡œë˜ 645 ì´ ë‹¹ì²¨ìž",
+                    "unit_of_measurement": "ëª…",
                     "icon": "mdi:account-group",
                 })
                 
@@ -832,8 +832,8 @@ async def update_sensors():
                     await publish_sensor("lotto45_top_frequency_number", top_num.number, {
                         "count": top_num.count,
                         "percentage": top_num.percentage,
-                        "unit_of_measurement": "회",
-                        "friendly_name": "로또 45 최다 출현 번호",
+                        "unit_of_measurement": "íšŒ",
+                        "friendly_name": "ë¡œë˜ 45 ìµœë‹¤ ì¶œí˜„ ë²ˆí˜¸",
                         "icon": "mdi:star",
                     })
             except Exception as e:
@@ -845,13 +845,13 @@ async def update_sensors():
                 await publish_sensor("lotto45_hot_numbers", 
                     ",".join(map(str, hot_cold.hot_numbers)), {
                         "numbers": hot_cold.hot_numbers,
-                        "friendly_name": "로또 45 핫 넘버",
+                        "friendly_name": "ë¡œë˜ 45 í•« ë„˜ë²„",
                         "icon": "mdi:fire",
                     })
                 await publish_sensor("lotto45_cold_numbers",
                     ",".join(map(str, hot_cold.cold_numbers)), {
                         "numbers": hot_cold.cold_numbers,
-                        "friendly_name": "로또 45 콜드 넘버",
+                        "friendly_name": "ë¡œë˜ 45 ì½œë“œ ë„˜ë²„",
                         "icon": "mdi:snowflake",
                     })
             except Exception as e:
@@ -868,7 +868,7 @@ async def update_sensors():
                     "roi": stats.roi,
                     "rank_distribution": stats.rank_distribution,
                     "unit_of_measurement": "KRW",
-                    "friendly_name": "로또 45 총 당첨금",
+                    "friendly_name": "ë¡œë˜ 45 ì´ ë‹¹ì²¨ê¸ˆ",
                     "icon": "mdi:trophy",
                 })
             except Exception as e:
@@ -898,7 +898,7 @@ async def update_sensors():
                         "result": latest_purchase.result,
                         "games": games_info,
                         "games_count": len(latest_purchase.games),
-                        "friendly_name": "최근 구매",
+                        "friendly_name": "ìµœê·¼ êµ¬ë§¤",
                         "icon": "mdi:receipt-text",
                     })
                     
@@ -917,19 +917,103 @@ async def update_sensors():
                             break
                     
                     logger.info(f"Publishing {len(all_games)} individual game sensors from {len(history)} purchase(s)...")
+                    
+                    # Get latest round info for comparison
+                    latest_round_no = await lotto_645.async_get_latest_round_no()
+                    
                     for i, game_info in enumerate(all_games, 1):
                         game = game_info['game']
+                        round_no = game_info['round_no']
                         numbers_str = ", ".join(map(str, game.numbers))
+                        
+                        # Publish game numbers sensor
                         await publish_sensor(f"lotto45_game_{i}", numbers_str, {
                             "slot": game.slot,
                             "mode": str(game.mode),
                             "numbers": game.numbers,
-                            "round_no": game_info['round_no'],
+                            "round_no": round_no,
                             "result": game_info['result'],
-                            "friendly_name": f"게임 {i}",
+                            "friendly_name": f"ê²Œìž„ {i}",
                             "icon": f"mdi:numeric-{i}-box-multiple",
                         })
-                        logger.info(f"Game {i} ({game.slot}): {numbers_str} - {game.mode} (Round {game_info['round_no']})")
+                        logger.info(f"Game {i} ({game.slot}): {numbers_str} - {game.mode} (Round {round_no})")
+                        
+                        # Check winning result for each game
+                        try:
+                            result_text = "미추첨"
+                            result_icon = "mdi:clock-outline"
+                            result_color = "grey"
+                            matching_count = 0
+                            bonus_match = False
+                            winning_numbers = []
+                            bonus_number = 0
+                            rank = 0
+                            
+                            # Only check if the round has been drawn
+                            if round_no <= latest_round_no:
+                                # Get winning numbers for this round
+                                winning_data = await lotto_645.async_get_round_info(round_no)
+                                winning_numbers = winning_data.numbers
+                                bonus_number = winning_data.bonus_num
+                                
+                                # Check winning
+                                check_result = await analyzer.async_check_winning(game.numbers, round_no)
+                                matching_count = check_result['matching_count']
+                                bonus_match = check_result['bonus_match']
+                                rank = check_result['rank']
+                                
+                                # Determine result text and icon
+                                if rank == 1:
+                                    result_text = "1등 당첨"
+                                    result_icon = "mdi:trophy"
+                                    result_color = "gold"
+                                elif rank == 2:
+                                    result_text = "2등 당첨"
+                                    result_icon = "mdi:medal"
+                                    result_color = "silver"
+                                elif rank == 3:
+                                    result_text = "3등 당첨"
+                                    result_icon = "mdi:medal-outline"
+                                    result_color = "bronze"
+                                elif rank == 4:
+                                    result_text = "4등 당첨"
+                                    result_icon = "mdi:currency-krw"
+                                    result_color = "blue"
+                                elif rank == 5:
+                                    result_text = "5등 당첨"
+                                    result_icon = "mdi:cash"
+                                    result_color = "green"
+                                else:
+                                    result_text = "낙첨"
+                                    result_icon = "mdi:close-circle-outline"
+                                    result_color = "red"
+                            
+                            # Publish winning result sensor
+                            await publish_sensor(f"lotto45_game_{i}_result", result_text, {
+                                "round_no": round_no,
+                                "my_numbers": game.numbers,
+                                "winning_numbers": winning_numbers,
+                                "bonus_number": bonus_number,
+                                "matching_count": matching_count,
+                                "bonus_match": bonus_match,
+                                "rank": rank,
+                                "result": result_text,
+                                "color": result_color,
+                                "friendly_name": f"ê²Œìž„ {i} ë‹¹ì²¨ 결과",
+                                "icon": result_icon,
+                            })
+                            logger.info(f"Game {i} result: {result_text} (일치: {matching_count}개, Rank: {rank})")
+                            
+                        except Exception as e:
+                            logger.warning(f"Failed to check winning for game {i}: {e}")
+                            # Publish default sensor on error
+                            await publish_sensor(f"lotto45_game_{i}_result", "확인 불가", {
+                                "round_no": round_no,
+                                "my_numbers": game.numbers,
+                                "error": str(e),
+                                "friendly_name": f"ê²Œìž„ {i} ë‹¹ì²¨ 결과",
+                                "icon": "mdi:alert-circle-outline",
+                            })
                     
                     # Count pending purchases
                     pending_count = sum(1 for h in history if "not" in str(h.result).lower() or "drawn" not in str(h.result).lower())
@@ -939,7 +1023,7 @@ async def update_sensors():
                     await publish_sensor("lotto45_purchase_history_count", len(history), {
                         "total_games": total_games,
                         "pending_count": pending_count,
-                        "friendly_name": "구매 기록 수",
+                        "friendly_name": "êµ¬ë§¤ ê¸°ë¡ ìˆ˜",
                         "icon": "mdi:counter",
                     })
                     
@@ -950,7 +1034,7 @@ async def update_sensors():
         from datetime import timezone
         now = datetime.now(timezone.utc).isoformat()
         await publish_sensor("lotto45_last_update", now, {
-            "friendly_name": "마지막 업데이트",
+            "friendly_name": "ë§ˆì§€ë§‰ ì—…ë°ì´íŠ¸",
             "icon": "mdi:clock-check-outline",
             # Note: removed device_class="timestamp" to avoid timezone validation issues
         })
