@@ -105,7 +105,7 @@ class MQTTDiscovery:
         config = {
             "name": name,
             "unique_id": unique_id,
-            "object_id": object_id,
+            "default_entity_id": f"sensor.{object_id}",  # Updated: object_id deprecated
             "state_topic": state_topic,
             "device": {
                 "identifiers": [f"dhlottery_addon_{username}"],

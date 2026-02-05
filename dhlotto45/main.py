@@ -537,8 +537,9 @@ async def update_sensors():
             except Exception as e:
                 logger.warning(f"Failed to get purchase stats: {e}")
         
-        # Update time
-        now = datetime.now().isoformat()
+        # Update time (with timezone)
+        from datetime import timezone
+        now = datetime.now(timezone.utc).isoformat()
         await publish_sensor("lotto45_last_update", now, {
             "friendly_name": "Last Update",
             "device_class": "timestamp",
