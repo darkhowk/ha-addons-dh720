@@ -161,7 +161,7 @@ class MQTTDiscovery:
                 "name": f"DH Lottery ({username})",
                 "manufacturer": "DH Lottery",
                 "model": "Add-on",
-                "sw_version": "0.5.3",
+                "sw_version": "1.0.0",
             },
         }
         
