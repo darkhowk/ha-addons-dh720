@@ -7,14 +7,14 @@ Home Assistant에서 동행복권 로또 6/45를 자동으로 구매하고 분�
 
 ## 주요 기능
 
-- 🎫 **자동 구매**: 버튼 클릭만으로 로또 자동 구매
-- 📊 **실시간 분석**: 당첨번호, 상금, 통계 정보 자동 업데이트
-- 🔔 **자동화 연동**: Home Assistant 자동화와 완벽하게 통합
-- 📈 **통계 분석**: Hot/Cold 번호, 출현 빈도 분석
-- 💰 **예치금 관리**: 잔액 및 구매 가능 금액 모니터링
-- 🔌 **MQTT Discovery**: Home Assistant와 자동 통합
-- 🌐 **REST API**: 외부 앱에서도 사용 가능
-- 📱 **모바일 알림**: 구매 완료, 당첨번호 발표 등 자동 알림
+-  **자동 구매**: 버튼 클릭만으로 로또 자동 구매
+-  **실시간 분석**: 당첨번호, 상금, 통계 정보 자동 업데이트
+-  **자동화 연동**: Home Assistant 자동화와 완벽하게 통합
+-  **통계 분석**: Hot/Cold 번호, 출현 빈도 분석
+-  **예치금 관리**: 잔액 및 구매 가능 금액 모니터링
+-  **MQTT Discovery**: Home Assistant와 자동 통합
+-  **REST API**: 외부 앱에서도 사용 가능
+-  **모바일 알림**: 구매 완료, 당첨번호 발표 등 자동 알림
 
 ---
 
@@ -196,7 +196,7 @@ trigger:
 action:
   - service: notify.mobile_app
     data:
-      title: "⚠️ 로또 예치금 부족"
+      title: "로또 예치금 부족"
       message: "현재 예치금: {{ states('sensor.dhlotto_ng410808_lotto45_balance') }}원"
 mode: single
 ```
@@ -221,7 +221,7 @@ action:
       entity_id: button.dhlotto_ng410808_buy_auto_5
   - service: notify.mobile_app
     data:
-      title: "🎫 로또 자동 구매 완료"
+      title: "로또 자동 구매 완료"
       message: "5게임 구매가 완료되었습니다."
 mode: single
 ```
@@ -250,7 +250,7 @@ action:
       seconds: 10
   - service: notify.mobile_app
     data:
-      title: "🎰 로또 당첨번호 발표"
+      title: "로또 당첨번호 발표"
       message: >
         {{ states('sensor.dhlotto_ng410808_lotto645_winning_numbers') }}
         
@@ -273,7 +273,7 @@ trigger:
 action:
   - service: notify.mobile_app
     data:
-      title: "💰 로또 고액 당첨!"
+      title: "로또 고액 당첨!"
       message: >
         이번 주 1등 상금: {{ (states('sensor.dhlotto_ng410808_lotto645_first_prize') | int / 100000000) | round(1) }}억원!
         당첨자: {{ states('sensor.dhlotto_ng410808_lotto645_first_winners') }}명
@@ -293,7 +293,7 @@ trigger:
 action:
   - service: notify.mobile_app
     data:
-      title: "🔥 로또 핫 넘버 업데이트"
+      title: "로또 핫 넘버 업데이트"
       message: >
         최근 자주 나온 번호:
         {{ states('sensor.dhlotto_ng410808_lotto45_hot_numbers') }}
@@ -313,7 +313,7 @@ trigger:
 action:
   - service: notify.mobile_app
     data:
-      title: "✅ 로또 구매 완료"
+      title: "로또 구매 완료"
       message: >
         회차: {{ state_attr('sensor.dhlotto_ng410808_lotto45_latest_purchase', 'round_no') }}회
         
@@ -333,7 +333,7 @@ Lovelace 대시보드에 로또 정보를 표시하는 카드 예시입니다.
 type: vertical-stack
 cards:
   - type: entities
-    title: 🎰 로또 6/45 당첨번호
+    title: 로또 6/45 당첨번호
     entities:
       - entity: sensor.dhlotto_ng410808_lotto645_round
         name: 회차
@@ -348,7 +348,7 @@ cards:
         name: 1등 당첨자
   
   - type: entities
-    title: 💰 내 계정 정보
+    title: 내 계정 정보
     entities:
       - entity: sensor.dhlotto_ng410808_lotto45_balance
         name: 예치금
@@ -358,7 +358,7 @@ cards:
         name: 구매 기록
   
   - type: entities
-    title: 🎫 빠른 구매
+    title: 빠른 구매
     entities:
       - entity: button.dhlotto_ng410808_buy_auto_1
         name: 1게임 구매
@@ -376,7 +376,7 @@ cards:
         name: 최다 출현 번호
   
   - type: entities
-    title: 🎲 최근 구매 내역
+    title: 최근 구매 내역
     entities:
       - entity: sensor.dhlotto_ng410808_lotto45_game_1
         name: 게임 1
