@@ -16,6 +16,8 @@ import uvicorn
 
 from dh_lottery_client import DhLotteryClient
 from dh_lotto_645 import DhLotto645
+from dh_lotto_645_ext import get_lotto645_winning_details
+from dh_lotto_720 import DhLotto720
 from dh_lotto_analyzer import DhLottoAnalyzer
 from mqtt_discovery import MQTTDiscovery, publish_sensor_mqtt
 
@@ -39,6 +41,7 @@ config = {
 
 client: Optional[DhLotteryClient] = None
 lotto_645: Optional[DhLotto645] = None
+lotto_720: Optional[DhLotto720] = None
 analyzer: Optional[DhLottoAnalyzer] = None
 mqtt_client: Optional[MQTTDiscovery] = None
 event_loop: Optional[asyncio.AbstractEventLoop] = None
@@ -165,7 +168,39 @@ async def register_buttons():
     else:
         logger.error("[BUTTON] Failed to register button: buy_auto_5")
     
-    if success1 and success2:
+    # Button 3: Buy 1 Pension Lottery
+    button3_topic = f"homeassistant/button/dhlotto_{username}_buy_pension_1/command"
+    logger.info(f"[BUTTON] Button 3 command topic: {button3_topic}")
+    
+    success3 = mqtt_client.publish_button_discovery(
+        button_id="buy_pension_1",
+        name="Buy 1 Pension Lottery",
+        command_topic=button3_topic,
+        username=username,
+        icon="mdi:cash-multiple",
+    )
+    if success3:
+        logger.info("[BUTTON] Button registered: buy_pension_1")
+    else:
+        logger.error("[BUTTON] Failed to register button: buy_pension_1")
+    
+    # Button 4: Buy 5 Pension Lotteries (Max)
+    button4_topic = f"homeassistant/button/dhlotto_{username}_buy_pension_5/command"
+    logger.info(f"[BUTTON] Button 4 command topic: {button4_topic}")
+    
+    success4 = mqtt_client.publish_button_discovery(
+        button_id="buy_pension_5",
+        name="Buy 5 Pension Lotteries",
+        command_topic=button4_topic,
+        username=username,
+        icon="mdi:cash-check",
+    )
+    if success4:
+        logger.info("[BUTTON] Button registered: buy_pension_5")
+    else:
+        logger.error("[BUTTON] Failed to register button: buy_pension_5")
+    
+    if success1 and success2 and success3 and success4:
         logger.info("[BUTTON] All button entities registered successfully")
     else:
         logger.warning("[BUTTON] Some buttons failed to register")
@@ -219,68 +254,124 @@ async def execute_button_purchase(button_id: str):
     """Execute purchase based on button_id"""
     logger.info(f"[PURCHASE] Starting purchase for button_id: {button_id}")
     
-    if not lotto_645:
-        logger.error("[PURCHASE] Lotto 645 not enabled")
-        return
+    # Check if it's a pension lottery button
+    if button_id.startswith("buy_pension_"):
+        # Pension lottery purchase
+        if not lotto_720:
+            logger.error("[PURCHASE] Pension Lottery not enabled")
+            return
+        
+        try:
+            # Determine number of tickets
+            count = 1
+            if button_id == "buy_pension_5":
+                count = 5
+            elif button_id == "buy_pension_1":
+                count = 1
+            else:
+                logger.warning(f"[PURCHASE] Unknown button_id: {button_id}, defaulting to 1 ticket")
+                count = 1
+            
+            logger.info(f"[PURCHASE] Executing pension lottery purchase: {count} ticket(s)...")
+            
+            # Execute purchase
+            result = await lotto_720.async_buy(count)
+            
+            logger.info(f"[PURCHASE] Pension lottery purchase successful!")
+            logger.info(f"[PURCHASE] Round: {result.round_no}")
+            logger.info(f"[PURCHASE] Barcode: {result.barcode}")
+            logger.info(f"[PURCHASE] Issue Date: {result.issue_dt}")
+            logger.info(f"[PURCHASE] Tickets: {len(result.numbers)}")
+            
+            # Format ticket numbers for logging
+            for i, number in enumerate(result.numbers, 1):
+                logger.info(f"[PURCHASE]   Ticket {i}: {number}")
+            
+            # Update all sensors immediately to reflect the purchase
+            logger.info(f"[PURCHASE] Updating all sensors...")
+            await update_sensors()
+            
+            logger.info(f"[PURCHASE] Pension lottery purchase completed successfully!")
+            
+        except Exception as e:
+            logger.error(f"[PURCHASE] Pension lottery purchase failed: {e}", exc_info=True)
+            
+            # Send error notification
+            error_data = {
+                "error": str(e),
+                "button_id": button_id,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "friendly_name": "Pension Purchase Error",
+                "icon": "mdi:alert-circle",
+            }
+            
+            logger.info(f"[PURCHASE] Publishing error sensor...")
+            await publish_sensor("lotto720_purchase_error", str(e)[:255], error_data)
     
-    try:
-        from dh_lotto_645 import DhLotto645, DhLotto645SelMode
+    else:
+        # Lotto 6/45 purchase
+        if not lotto_645:
+            logger.error("[PURCHASE] Lotto 645 not enabled")
+            return
         
-        # Determine number of games
-        count = 1
-        if button_id == "buy_auto_5":
-            count = 5
-        elif button_id == "buy_auto_1":
+        try:
+            from dh_lotto_645 import DhLotto645, DhLotto645SelMode
+            
+            # Determine number of games
             count = 1
-        else:
-            logger.warning(f"[PURCHASE] Unknown button_id: {button_id}, defaulting to 1 game")
-            count = 1
-        
-        logger.info(f"[PURCHASE] Creating {count} auto game slots...")
-        
-        # Create auto game slots
-        slots = [DhLotto645.Slot(mode=DhLotto645SelMode.AUTO, numbers=[]) for _ in range(count)]
-        
-        logger.info(f"[PURCHASE] Executing purchase: {count} game(s)...")
-        
-        # Execute purchase
-        result = await lotto_645.async_buy(slots)
-        
-        logger.info(f"[PURCHASE] Purchase successful!")
-        logger.info(f"[PURCHASE] Round: {result.round_no}")
-        logger.info(f"[PURCHASE] Barcode: {result.barcode}")
-        logger.info(f"[PURCHASE] Issue Date: {result.issue_dt}")
-        logger.info(f"[PURCHASE] Games: {len(result.games)}")
-        
-        # Format games for logging
-        for game in result.games:
-            logger.info(f"[PURCHASE]   Slot {game.slot}: {game.numbers} ({game.mode})")
-        
-        # Update all sensors immediately to reflect the purchase
-        logger.info(f"[PURCHASE] Updating all sensors...")
-        await update_sensors()
-        
-        logger.info(f"[PURCHASE] Purchase completed successfully!")
-        
-    except Exception as e:
-        logger.error(f"[PURCHASE] Purchase failed: {e}", exc_info=True)
-        
-        # Send error notification
-        error_data = {
-            "error": str(e),
-            "button_id": button_id,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "friendly_name": "Purchase Error",
-            "icon": "mdi:alert-circle",
-        }
-        
-        logger.info(f"[PURCHASE] Publishing error sensor...")
-        await publish_sensor("lotto45_purchase_error", str(e)[:255], error_data)
+            if button_id == "buy_auto_5":
+                count = 5
+            elif button_id == "buy_auto_1":
+                count = 1
+            else:
+                logger.warning(f"[PURCHASE] Unknown button_id: {button_id}, defaulting to 1 game")
+                count = 1
+            
+            logger.info(f"[PURCHASE] Creating {count} auto game slots...")
+            
+            # Create auto game slots
+            slots = [DhLotto645.Slot(mode=DhLotto645SelMode.AUTO, numbers=[]) for _ in range(count)]
+            
+            logger.info(f"[PURCHASE] Executing purchase: {count} game(s)...")
+            
+            # Execute purchase
+            result = await lotto_645.async_buy(slots)
+            
+            logger.info(f"[PURCHASE] Purchase successful!")
+            logger.info(f"[PURCHASE] Round: {result.round_no}")
+            logger.info(f"[PURCHASE] Barcode: {result.barcode}")
+            logger.info(f"[PURCHASE] Issue Date: {result.issue_dt}")
+            logger.info(f"[PURCHASE] Games: {len(result.games)}")
+            
+            # Format games for logging
+            for game in result.games:
+                logger.info(f"[PURCHASE]   Slot {game.slot}: {game.numbers} ({game.mode})")
+            
+            # Update all sensors immediately to reflect the purchase
+            logger.info(f"[PURCHASE] Updating all sensors...")
+            await update_sensors()
+            
+            logger.info(f"[PURCHASE] Purchase completed successfully!")
+            
+        except Exception as e:
+            logger.error(f"[PURCHASE] Purchase failed: {e}", exc_info=True)
+            
+            # Send error notification
+            error_data = {
+                "error": str(e),
+                "button_id": button_id,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "friendly_name": "Purchase Error",
+                "icon": "mdi:alert-circle",
+            }
+            
+            logger.info(f"[PURCHASE] Publishing error sensor...")
+            await publish_sensor("lotto45_purchase_error", str(e)[:255], error_data)
 
 
 async def init_client():
     """Initialize client"""
-    global client, lotto_645, analyzer, mqtt_client
+    global client, lotto_645, lotto_720, analyzer, mqtt_client
     
     if not config["username"] or not config["password"]:
         logger.error("Username or password not configured")
@@ -293,6 +384,7 @@ async def init_client():
         
         if config["enable_lotto645"]:
             lotto_645 = DhLotto645(client)
+            lotto_720 = DhLotto720(client)
             analyzer = DhLottoAnalyzer(client)
         
         # Initialize MQTT if enabled
@@ -685,6 +777,84 @@ async def update_sensors():
                         "icon": "mdi:calendar",
                         "device_class": "date",
                     })
+                
+                # ========== NEW: Prize Details from Public API ==========
+                try:
+                    logger.info("Fetching lotto prize details from public API...")
+                    prize_details = await get_lotto645_winning_details(latest_round_info.round_no)
+                    
+                    # Total sales
+                    await publish_sensor("lotto645_total_sales", prize_details.total_sales, {
+                        "friendly_name": "Lotto 645 Total Sales",
+                        "unit_of_measurement": "KRW",
+                        "icon": "mdi:cash-multiple",
+                    })
+                    
+                    # 1st prize amount (per winner)
+                    await publish_sensor("lotto645_first_prize", prize_details.first_prize_amount, {
+                        "friendly_name": "Lotto 645 1st Prize",
+                        "unit_of_measurement": "KRW",
+                        "total_amount": prize_details.first_prize_total,
+                        "winners": prize_details.first_prize_winners,
+                        "icon": "mdi:trophy",
+                    })
+                    
+                    # 1st prize winners count
+                    await publish_sensor("lotto645_first_winners", prize_details.first_prize_winners, {
+                        "friendly_name": "Lotto 645 1st Winners",
+                        "unit_of_measurement": "people",
+                        "icon": "mdi:account-multiple",
+                    })
+                    
+                    logger.info(f"Prize details updated: Sales={prize_details.total_sales:,}, "
+                               f"1st={prize_details.first_prize_amount:,} x {prize_details.first_prize_winners}")
+                    
+                except Exception as e:
+                    logger.warning(f"Failed to fetch prize details: {e}")
+                
+            except Exception as e:
+                logger.warning(f"Failed to fetch lotto results: {e}")
+            
+            # ========== NEW: Pension Lottery 720+ ==========
+            if lotto_720:
+                try:
+                    logger.info("Fetching pension lottery 720+ results...")
+                    pension_info = await lotto_720.async_get_round_info()
+                    
+                    # Pension lottery round
+                    await publish_sensor("lotto720_round", pension_info.round_no, {
+                        "friendly_name": "Pension Lottery Round",
+                        "icon": "mdi:counter",
+                    })
+                    
+                    # 1st prize winning number
+                    await publish_sensor("lotto720_first_number", pension_info.first_prize_number, {
+                        "friendly_name": "Pension Lottery 1st Number",
+                        "icon": "mdi:numeric",
+                    })
+                    
+                    # 1st prize amount (monthly pension)
+                    await publish_sensor("lotto720_first_prize", pension_info.first_prize_amount, {
+                        "friendly_name": "Pension Lottery 1st Prize",
+                        "unit_of_measurement": "만원/월",
+                        "icon": "mdi:cash",
+                        "note": "Monthly payment for 20 years",
+                    })
+                    
+                    # Draw date
+                    pension_draw_date = _parse_yyyymmdd(pension_info.draw_date)
+                    if pension_draw_date:
+                        await publish_sensor("lotto720_draw_date", pension_draw_date, {
+                            "friendly_name": "Pension Lottery Draw Date",
+                            "icon": "mdi:calendar",
+                            "device_class": "date",
+                        })
+                    
+                    logger.info(f"Pension lottery updated: Round={pension_info.round_no}, "
+                               f"Number={pension_info.first_prize_number}")
+                    
+                except Exception as e:
+                    logger.warning(f"Failed to fetch pension lottery results: {e}")
                 
             except Exception as e:
                 logger.warning(f"Failed to fetch lotto results: {e}")
@@ -1218,6 +1388,113 @@ async def get_buy_history():
         return {
             "count": len(results),
             "items": results,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ========== Pension Lottery 720+ Endpoints ==========
+
+@app.post("/pension/buy")
+async def buy_pension(count: int = 1):
+    """
+    Buy Pension Lottery 720+ tickets
+    
+    Args:
+        count: Number of tickets to purchase (1-5, default: 1)
+    
+    Returns:
+        Purchase result with round number, barcode, and ticket numbers
+    
+    Notes:
+        - Automatic number generation only
+        - Maximum 5 tickets per week
+        - Thursday 5 PM - 10 PM: Sales closed
+    
+    Example:
+        POST /pension/buy?count=3
+    """
+    if not lotto_720:
+        raise HTTPException(status_code=400, detail="Pension Lottery not enabled")
+    
+    if count < 1 or count > 5:
+        raise HTTPException(status_code=400, detail="Count must be between 1 and 5")
+    
+    try:
+        logger.info(f"Purchasing {count} pension lottery ticket(s)...")
+        result = await lotto_720.async_buy(count)
+        
+        response = {
+            "success": True,
+            "round_no": result.round_no,
+            "barcode": result.barcode,
+            "issue_dt": result.issue_dt,
+            "count": len(result.numbers),
+            "numbers": result.numbers,
+        }
+        
+        logger.info(f"Pension lottery purchase successful: Round {result.round_no}, "
+                   f"{len(result.numbers)} ticket(s)")
+        return response
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Pension lottery purchase failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/pension/history")
+async def get_pension_history():
+    """
+    Get pension lottery purchase history from last week
+    
+    Returns:
+        Purchase history with ticket numbers and results
+    """
+    if not lotto_720:
+        raise HTTPException(status_code=400, detail="Pension Lottery not enabled")
+    
+    try:
+        history = await lotto_720.async_get_buy_history_this_week()
+        
+        results = []
+        for item in history:
+            results.append({
+                "round_no": item.round_no,
+                "barcode": item.barcode,
+                "result": item.result,
+                "numbers": item.numbers,
+            })
+        
+        return {
+            "count": len(results),
+            "items": results,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/pension/info")
+async def get_pension_info():
+    """
+    Get current pension lottery round information
+    
+    Returns:
+        Current round number, winning number, and prize amount
+    """
+    if not lotto_720:
+        raise HTTPException(status_code=400, detail="Pension Lottery not enabled")
+    
+    try:
+        info = await lotto_720.async_get_round_info()
+        
+        return {
+            "round_no": info.round_no,
+            "draw_date": info.draw_date,
+            "first_prize_number": info.first_prize_number,
+            "first_prize_amount": info.first_prize_amount,
+            "bonus_number": info.bonus_number,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
