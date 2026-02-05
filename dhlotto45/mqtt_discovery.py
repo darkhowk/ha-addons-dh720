@@ -191,7 +191,6 @@ class MQTTDiscovery:
             payload = json.dumps(config)
             result = self.client.publish(discovery_topic, payload, qos=1, retain=True)
             result.wait_for_publish()
-            _LOGGER.debug(f"Published discovery for {sensor_id}: {discovery_topic}")
             return True
         except Exception as e:
             _LOGGER.error(f"Failed to publish discovery for {sensor_id}: {e}")
@@ -227,7 +226,6 @@ class MQTTDiscovery:
                 result = self.client.publish(attr_topic, attr_payload, qos=1, retain=True)
                 result.wait_for_publish()
             
-            _LOGGER.debug(f"Published state for {sensor_id}: {state}")
             return True
         except Exception as e:
             _LOGGER.error(f"Failed to publish state for {sensor_id}: {e}")
@@ -372,7 +370,6 @@ async def publish_sensor_mqtt(
         attributes: Sensor attributes (includes friendly_name, icon, etc.)
     """
     if not mqtt_client or not mqtt_client.connected:
-        _LOGGER.warning(f"MQTT client not available for {entity_id}")
         return False
     
     # Extract metadata from attributes
@@ -389,8 +386,9 @@ async def publish_sensor_mqtt(
     if attributes:
         json_attributes_topic = f"homeassistant/sensor/{TOPIC_PREFIX}_{username}_{entity_id}/attributes"
     
-    # Log for purchase-related sensors
-    if "purchase" in entity_id or "latest" in entity_id:
+    # Only log important sensors
+    is_important = "purchase" in entity_id or "latest" in entity_id
+    if is_important:
         _LOGGER.info(f"Publishing MQTT sensor: {entity_id} = {state}")
     
     # Publish discovery config (only once, but retained)
@@ -413,11 +411,8 @@ async def publish_sensor_mqtt(
         attributes=attributes
     )
     
-    if "purchase" in entity_id or "latest" in entity_id:
-        if result:
-            _LOGGER.info(f"MQTT sensor published successfully: {entity_id}")
-        else:
-            _LOGGER.error(f"MQTT sensor publish failed: {entity_id}")
+    if is_important and result:
+        _LOGGER.info(f"MQTT sensor published: {entity_id}")
     
     return result
 

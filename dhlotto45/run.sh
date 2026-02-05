@@ -1,6 +1,6 @@
 #!/usr/bin/with-contenv bashio
 
-bashio::log.info "Starting Lotto 45 Add-on v0.5.3..."
+bashio::log.info "Starting Lotto 45 Add-on v0.6.8..."
 
 # Configuration variables
 export USERNAME=$(bashio::config 'username')

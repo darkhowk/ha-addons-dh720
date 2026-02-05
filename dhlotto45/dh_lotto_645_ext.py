@@ -85,30 +85,19 @@ async def get_lotto645_winning_details(round_no: Optional[int] = None) -> Lotto6
         connector = aiohttp.TCPConnector(ssl=False)
         
         async with aiohttp.ClientSession(connector=connector, headers=headers, timeout=timeout) as session:
-            # Allow redirects and follow them
             async with session.get(PUBLIC_API_URL, params=params, allow_redirects=True) as resp:
-                final_url = str(resp.url)
-                _LOGGER.debug(f"Lotto 645 ext API: status={resp.status}, final_url={final_url}")
-                
                 if resp.status != 200:
                     raise Exception(f"API request failed: {resp.status}")
-                
-                # Check content type
-                content_type = resp.headers.get('Content-Type', '')
-                _LOGGER.debug(f"Content-Type: {content_type}")
                 
                 # Try to parse as JSON
                 try:
                     data = await resp.json()
-                except Exception as json_error:
-                    # If JSON parsing fails, log the response
-                    text = await resp.text()
-                    _LOGGER.error(f"Failed to parse JSON. Content-Type: {content_type}, Response: {text[:500]}")
-                    raise Exception(f"API returned non-JSON response: {json_error}")
+                except Exception:
+                    # API returned non-JSON (probably HTML redirect or blocking)
+                    raise Exception(f"API returned non-JSON response (status: {resp.status})")
                 
                 if data.get("returnValue") != "success":
-                    _LOGGER.error(f"API returned error: {data}")
-                    raise Exception(f"API returned error: {data.get('returnValue', 'unknown')}")
+                    raise Exception(f"API error: {data.get('returnValue', 'unknown')}")
                 
                 # Parse response
                 return Lotto645WinningDetails(

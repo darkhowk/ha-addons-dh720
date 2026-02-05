@@ -1,7 +1,7 @@
 """
-Lotto 45 Add-on Main Application v0.5.3
+Lotto 45 Add-on Main Application v0.6.8
 Home Assistant Add-on for DH Lottery 6/45
-v0.5.3 - MQTT Discovery + Button Support
+v0.6.8 - Optimized logging and added prize detail sensors
 """
 
 import os
@@ -298,7 +298,7 @@ async def init_client():
         return False
     
     try:
-        logger.info("Initializing DH Lottery client v0.5.3...")
+        logger.info("Initializing DH Lottery client v0.6.8...")
         client = DhLotteryClient(config["username"], config["password"])
         await client.async_login()
         
@@ -368,7 +368,7 @@ async def lifespan(app: FastAPI):
     global event_loop
     
     # Startup
-    logger.info("Starting Lotto 45 Add-on v0.5.3...")
+    logger.info("Starting Lotto 45 Add-on v0.6.8...")
     logger.info(f"Configuration: username={config['username']}, "
                 f"enable_lotto645={config['enable_lotto645']}, "
                 f"update_interval={config['update_interval']}")
@@ -401,7 +401,7 @@ async def lifespan(app: FastAPI):
 # FastAPI app
 app = FastAPI(
     title="Lotto 45",
-    version="0.5.3",
+    version="0.6.8",
     lifespan=lifespan
 )
 
@@ -446,7 +446,7 @@ async def custom_docs():
   "logged_in": true,
   "username": "your_id",
   "lotto645_enabled": true,
-  "version": "0.5.3"
+  "version": "0.6.8"
 }</pre>
             </div>
             
@@ -717,9 +717,8 @@ async def update_sensors():
                         "device_class": "date",
                     })
                 
-                # ========== NEW: Prize Details from Public API ==========
+                # ========== Prize Details from Public API ==========
                 try:
-                    logger.info("Fetching lotto prize details from public API...")
                     prize_details = await get_lotto645_winning_details(latest_round_info.round_no)
                     
                     # Total sales
@@ -729,7 +728,7 @@ async def update_sensors():
                         "icon": "mdi:cash-multiple",
                     })
                     
-                    # 1st prize amount (per winner)
+                    # 1st prize
                     await publish_sensor("lotto645_first_prize", prize_details.first_prize_amount, {
                         "friendly_name": "Lotto 645 1st Prize",
                         "unit_of_measurement": "KRW",
@@ -738,19 +737,48 @@ async def update_sensors():
                         "icon": "mdi:trophy",
                     })
                     
-                    # 1st prize winners count
                     await publish_sensor("lotto645_first_winners", prize_details.first_prize_winners, {
                         "friendly_name": "Lotto 645 1st Winners",
                         "unit_of_measurement": "people",
                         "icon": "mdi:account-multiple",
                     })
                     
-                    logger.info(f"Prize details updated: Sales={prize_details.total_sales:,}, "
-                               f"1st={prize_details.first_prize_amount:,} x {prize_details.first_prize_winners}")
+                    # 2nd-5th prize (if available)
+                    if prize_details.second_prize_amount:
+                        await publish_sensor("lotto645_second_prize", prize_details.second_prize_amount, {
+                            "friendly_name": "Lotto 645 2nd Prize",
+                            "unit_of_measurement": "KRW",
+                            "winners": prize_details.second_prize_winners,
+                            "icon": "mdi:medal",
+                        })
                     
-                except Exception as e:
-                    logger.warning(f"Failed to fetch prize details from public API: {e}")
-                    logger.debug("This is normal if the public API is temporarily unavailable")
+                    if prize_details.third_prize_amount:
+                        await publish_sensor("lotto645_third_prize", prize_details.third_prize_amount, {
+                            "friendly_name": "Lotto 645 3rd Prize",
+                            "unit_of_measurement": "KRW",
+                            "winners": prize_details.third_prize_winners,
+                            "icon": "mdi:medal-outline",
+                        })
+                    
+                    if prize_details.fourth_prize_amount:
+                        await publish_sensor("lotto645_fourth_prize", prize_details.fourth_prize_amount, {
+                            "friendly_name": "Lotto 645 4th Prize",
+                            "unit_of_measurement": "KRW",
+                            "winners": prize_details.fourth_prize_winners,
+                            "icon": "mdi:currency-krw",
+                        })
+                    
+                    if prize_details.fifth_prize_amount:
+                        await publish_sensor("lotto645_fifth_prize", prize_details.fifth_prize_amount, {
+                            "friendly_name": "Lotto 645 5th Prize",
+                            "unit_of_measurement": "KRW",
+                            "winners": prize_details.fifth_prize_winners,
+                            "icon": "mdi:cash",
+                        })
+                    
+                except Exception:
+                    # Silently ignore - API may be temporarily unavailable or blocked
+                    pass
                 
             except Exception as e:
                 logger.warning(f"Failed to fetch lotto results: {e}")
@@ -808,15 +836,11 @@ async def update_sensors():
             
             # Purchase history (last week)
             try:
-                logger.info("Fetching purchase history...")
                 history = await lotto_645.async_get_buy_history_this_week()
                 
                 if history:
-                    logger.info(f"Found {len(history)} purchase(s) in history")
-                    
                     # Get the most recent purchase
                     latest_purchase = history[0]
-                    logger.info(f"Latest purchase - Round: {latest_purchase.round_no}, Result: {latest_purchase.result}")
                     
                     # Format games for display
                     games_info = []
@@ -826,8 +850,6 @@ async def update_sensors():
                             "mode": str(game.mode),
                             "numbers": game.numbers
                         })
-                    
-                    logger.info(f"Publishing latest purchase sensor (Round {latest_purchase.round_no})...")
                     
                     # Publish latest purchase sensor
                     await publish_sensor("lotto45_latest_purchase", latest_purchase.round_no, {
@@ -839,8 +861,6 @@ async def update_sensors():
                         "friendly_name": "Latest Purchase",
                         "icon": "mdi:receipt-text",
                     })
-                    
-                    logger.info("Latest purchase sensor published successfully")
                     
                     # Publish individual game sensors from all purchases (up to 5 total games)
                     all_games = []
@@ -871,16 +891,9 @@ async def update_sensors():
                         })
                         logger.info(f"Game {i} ({game.slot}): {numbers_str} - {game.mode} (Round {game_info['round_no']})")
                     
-                    # Count pending (not yet drawn) purchases
-                    pending_count = 0
-                    for h in history:
-                        # Check for various "not drawn" status
-                        result_lower = str(h.result).lower()
-                        if "not" in result_lower or "drawn" not in result_lower:
-                            pending_count += 1
-                    
+                    # Count pending purchases
+                    pending_count = sum(1 for h in history if "not" in str(h.result).lower() or "drawn" not in str(h.result).lower())
                     total_games = sum(len(h.games) for h in history)
-                    logger.info(f"Publishing history count sensor (Total: {len(history)}, Games: {total_games}, Pending: {pending_count})...")
                     
                     # Publish purchase history count
                     await publish_sensor("lotto45_purchase_history_count", len(history), {
@@ -890,13 +903,8 @@ async def update_sensors():
                         "icon": "mdi:counter",
                     })
                     
-                    logger.info("History count sensor published successfully")
-                    logger.info(f"Purchase history updated: {len(history)} purchases found")
-                else:
-                    logger.info("No purchase history found")
-                    
             except Exception as e:
-                logger.error(f"Failed to get purchase history: {e}", exc_info=True)
+                logger.warning(f"Failed to get purchase history: {e}")
         
         # Update time (with timezone)
         from datetime import timezone
@@ -922,15 +930,15 @@ async def publish_sensor(entity_id: str, state, attributes: dict = None):
         state: Sensor state value
         attributes: Sensor attributes dictionary
     """
-    # Use INFO level for purchase-related sensors
-    log_level = logger.info if "purchase" in entity_id or "latest" in entity_id else logger.debug
+    # Only log purchase-related sensors
+    is_important = "purchase" in entity_id or "latest" in entity_id
     
-    log_level(f"[SENSOR] Publishing {entity_id}: {state}")
+    if is_important:
+        logger.info(f"[SENSOR] Publishing {entity_id}: {state}")
     
     # Try MQTT first if enabled
     if config["use_mqtt"] and mqtt_client and mqtt_client.connected:
         try:
-            log_level(f"[SENSOR] Using MQTT for {entity_id}")
             success = await publish_sensor_mqtt(
                 mqtt_client=mqtt_client,
                 entity_id=entity_id,
@@ -939,7 +947,8 @@ async def publish_sensor(entity_id: str, state, attributes: dict = None):
                 attributes=attributes
             )
             if success:
-                log_level(f"[SENSOR] Published via MQTT: {entity_id}")
+                if is_important:
+                    logger.info(f"[SENSOR] Published via MQTT: {entity_id}")
                 return
             else:
                 logger.warning(f"[SENSOR] MQTT publish failed for {entity_id}, falling back to REST API")
@@ -950,12 +959,10 @@ async def publish_sensor(entity_id: str, state, attributes: dict = None):
     import aiohttp
     
     if not config["supervisor_token"]:
-        logger.debug(f"[SENSOR] Skipping sensor publish (no token): {entity_id}")
         return
     
     # Add addon_ prefix to prevent conflicts with integration
     addon_entity_id = f"addon_{config['username']}_{entity_id}"
-    log_level(f"[SENSOR] Using REST API for {addon_entity_id}")
 
     url = f"{config['ha_url']}/api/states/sensor.{addon_entity_id}"
     headers = {
@@ -972,8 +979,8 @@ async def publish_sensor(entity_id: str, state, attributes: dict = None):
             async with session.post(url, json=data, headers=headers, ssl=False) as resp:
                 if resp.status not in [200, 201]:
                     logger.error(f"[SENSOR] Failed to publish {addon_entity_id}: {resp.status} - {await resp.text()}")
-                else:
-                    log_level(f"[SENSOR] Published via REST API: {addon_entity_id}: {state}")
+                elif is_important:
+                    logger.info(f"[SENSOR] Published via REST API: {addon_entity_id}")
     except Exception as e:
         logger.error(f"[SENSOR] Error publishing {addon_entity_id}: {e}")
 
@@ -989,7 +996,7 @@ async def root():
     <html>
         <head>
             <meta charset="UTF-8">
-            <title>Lotto 45 v0.5.3</title>
+            <title>Lotto 45 v0.6.8</title>
             <style>
                 body {{ font-family: Arial, sans-serif; margin: 40px; }}
                 h1 {{ color: #333; }}
@@ -1001,7 +1008,7 @@ async def root():
             </style>
         </head>
         <body>
-            <h1>DH Lottery Lotto 45 <span class="version">v0.5.3</span></h1>
+            <h1>DH Lottery Lotto 45 <span class="version">v0.6.8</span></h1>
             <div class="status">
                 Status: {status_icon} {status_text}
             </div>
@@ -1011,7 +1018,7 @@ async def root():
                 <p><strong>Lotto 645 Enabled:</strong> {config['enable_lotto645']}</p>
                 <p><strong>Version:</strong> 2.0.0 (Improved Login & Sensors)</p>
             </div>
-            <h2>Features v0.5.3</h2>
+            <h2>Features v0.6.8</h2>
             <ul>
                 <li> Improved login (RSA encryption + session management)</li>
                 <li> User-Agent rotation (anti-bot detection)</li>
@@ -1040,7 +1047,7 @@ async def health():
         "username": config["username"],
         "lotto645_enabled": config["enable_lotto645"],
         "mqtt_enabled": config["use_mqtt"],
-        "version": "2.1.0 (0.5.3)",
+        "version": "2.1.0 (0.6.8)",
     }
 
 
