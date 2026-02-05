@@ -1,5 +1,25 @@
 # 변경 이력
 
+## [0.4.6] - 2026-02-05
+
+### 수정
+- UTF-8 인코딩 문제 해결 (중요)
+  - 모든 센서 friendly_name을 영어로 변경
+  - 한글 인코딩 깨짐 현상 완전 해결
+  - unit_of_measurement: 원→KRW, 회→times
+
+### 센서 이름 변경
+- "동행복권 잔액" → "DH Lottery Balance"
+- "로또6/45 회차" → "Lotto 645 Round"
+- "로또6/45 번호 N" → "Lotto 645 Number N"
+- "로또6/45 보너스" → "Lotto 645 Bonus"
+- "로또6/45 추첨일" → "Lotto 645 Draw Date"
+- "로또45 Hot 번호" → "Lotto 45 Hot Numbers"
+- "로또45 Cold 번호" → "Lotto 45 Cold Numbers"
+- "로또45 최다 출현 번호" → "Lotto 45 Top Frequency Number"
+- "로또45 이 당첨금" → "Lotto 45 Total Winning"
+- "최근 업데이트" → "Last Update"
+
 ## [0.4.5] - 2026-02-05
 
 ### 추가

@@ -186,7 +186,7 @@ async def background_tasks():
 
 
 async def update_sensors():
-    """ì„¼ì„œ ì—…ë°ì´íŠ¸ - ê°œì„ ëœ ë²„ì „"""
+    """센서 업데이트 - 개선된 버전"""
     if not client or not client.logged_in:
         logger.warning("Client not logged in, attempting to login...")
         try:
@@ -198,23 +198,23 @@ async def update_sensors():
     try:
         logger.info("Updating sensors...")
         
-        # 1. ì˜ˆì¹˜ê¸ˆ ì¡°íšŒ
+        # 1. 예치금 조회
         balance = await client.async_get_balance()
         
-        # ê³„ì • ê´€ë ¨ ì„¼ì„œ (device_group: account)
+        # 계정 관련 센서
         await publish_sensor("lotto45_balance", balance.deposit, {
             "purchase_available": balance.purchase_available,
             "reservation_purchase": balance.reservation_purchase,
             "withdrawal_request": balance.withdrawal_request,
             "this_month_accumulated": balance.this_month_accumulated_purchase,
-            "unit_of_measurement": "ì›",
-            "friendly_name": "ë™í–‰ë³µê¶Œ ìž”ì•¡",
+            "unit_of_measurement": "KRW",
+            "friendly_name": "DH Lottery Balance",
             "icon": "mdi:wallet",
         })
         
-        # 2. ë¡œë˜ í†µê³„ ì—…ë°ì´íŠ¸ (ë¡œë˜ í™œì„±í™” ì‹œ)
+        # 2. 로또 통계 업데이트
         if config["enable_lotto645"] and analyzer:
-            # ë¡œë˜ ê²°ê³¼ ì¡°íšŒ
+            # 로또 결과 조회
             try:
                 latest_round_info = await lotto_645.async_get_round_info()
                 lotto_result = {
@@ -231,33 +231,33 @@ async def update_sensors():
                     }
                 }
                 
-                # ë¡œë˜ ê²°ê³¼ ì„¼ì„œë“¤ (device_group: lotto)
+                # 로또 결과 센서들
                 item = _get_lotto645_item(lotto_result)
                 
-                # íšŒì°¨
+                # 회차
                 await publish_sensor("lotto645_round", _safe_int(item.get("ltEpsd")), {
-                    "friendly_name": "ë¡œë˜6/45 íšŒì°¨",
+                    "friendly_name": "Lotto 645 Round",
                     "icon": "mdi:counter",
                 })
                 
-                # ë²ˆí˜¸ 1-6
+                # 번호 1-6
                 for i in range(1, 7):
                     await publish_sensor(f"lotto645_number{i}", _safe_int(item.get(f"tm{i}WnNo")), {
-                        "friendly_name": f"ë¡œë˜6/45 ë²ˆí˜¸ {i}",
+                        "friendly_name": f"Lotto 645 Number {i}",
                         "icon": f"mdi:numeric-{i}-circle",
                     })
                 
-                # ë³´ë„ˆìŠ¤ ë²ˆí˜¸
+                # 보너스 번호
                 await publish_sensor("lotto645_bonus", _safe_int(item.get("bnsWnNo")), {
-                    "friendly_name": "ë¡œë˜6/45 ë³´ë„ˆìŠ¤",
+                    "friendly_name": "Lotto 645 Bonus",
                     "icon": "mdi:star-circle",
                 })
                 
-                # ì¶”ì²¨ì¼
+                # 추첨일
                 draw_date = _parse_yyyymmdd(item.get("ltRflYmd"))
                 if draw_date:
                     await publish_sensor("lotto645_draw_date", draw_date, {
-                        "friendly_name": "ë¡œë˜6/45 ì¶”ì²¨ì¼",
+                        "friendly_name": "Lotto 645 Draw Date",
                         "icon": "mdi:calendar",
                         "device_class": "date",
                     })
@@ -265,7 +265,7 @@ async def update_sensors():
             except Exception as e:
                 logger.warning(f"Failed to fetch lotto results: {e}")
             
-            # ë²ˆí˜¸ ë¹ˆë„ ë¶„ì„
+            # 번호 빈도 분석
             try:
                 frequency = await analyzer.async_analyze_number_frequency(50)
                 top_num = frequency[0] if frequency else None
@@ -273,32 +273,32 @@ async def update_sensors():
                     await publish_sensor("lotto45_top_frequency_number", top_num.number, {
                         "count": top_num.count,
                         "percentage": top_num.percentage,
-                        "unit_of_measurement": "íšŒ",
-                        "friendly_name": "ë¡œë˜45 ìµœë‹¤ ì¶œí˜„ ë²ˆí˜¸",
+                        "unit_of_measurement": "times",
+                        "friendly_name": "Lotto 45 Top Frequency Number",
                         "icon": "mdi:star",
                     })
             except Exception as e:
                 logger.warning(f"Failed to analyze frequency: {e}")
             
-            # Hot/Cold ë²ˆí˜¸
+            # Hot/Cold 번호
             try:
                 hot_cold = await analyzer.async_get_hot_cold_numbers(20)
                 await publish_sensor("lotto45_hot_numbers", 
                     ",".join(map(str, hot_cold.hot_numbers)), {
                         "numbers": hot_cold.hot_numbers,
-                        "friendly_name": "ë¡œë˜45 Hot ë²ˆí˜¸",
+                        "friendly_name": "Lotto 45 Hot Numbers",
                         "icon": "mdi:fire",
                     })
                 await publish_sensor("lotto45_cold_numbers",
                     ",".join(map(str, hot_cold.cold_numbers)), {
                         "numbers": hot_cold.cold_numbers,
-                        "friendly_name": "ë¡œë˜45 Cold ë²ˆí˜¸",
+                        "friendly_name": "Lotto 45 Cold Numbers",
                         "icon": "mdi:snowflake",
                     })
             except Exception as e:
                 logger.warning(f"Failed to get hot/cold numbers: {e}")
             
-            # êµ¬ë§¤ í†µê³„
+            # 구매 통계
             try:
                 stats = await analyzer.async_get_purchase_statistics(365)
                 await publish_sensor("lotto45_total_winning", stats.total_winning_amount, {
@@ -308,17 +308,17 @@ async def update_sensors():
                     "win_rate": stats.win_rate,
                     "roi": stats.roi,
                     "rank_distribution": stats.rank_distribution,
-                    "unit_of_measurement": "ì›",
-                    "friendly_name": "ë¡œë˜45 ì´ ë‹¹ì²¨ê¸ˆ",
+                    "unit_of_measurement": "KRW",
+                    "friendly_name": "Lotto 45 Total Winning",
                     "icon": "mdi:trophy",
                 })
             except Exception as e:
                 logger.warning(f"Failed to get purchase stats: {e}")
         
-        # ì—…ë°ì´íŠ¸ ì‹œê°„ ê¸°ë¡
+        # 업데이트 시간 기록
         now = datetime.now().isoformat()
         await publish_sensor("lotto45_last_update", now, {
-            "friendly_name": "ìµœê·¼ ì—…ë°ì´íŠ¸",
+            "friendly_name": "Last Update",
             "device_class": "timestamp",
             "icon": "mdi:clock-check-outline",
         })
@@ -327,7 +327,6 @@ async def update_sensors():
         
     except Exception as e:
         logger.error(f"Failed to update sensors: {e}", exc_info=True)
-
 
 async def publish_sensor(entity_id: str, state, attributes: dict = None):
     """ì„¼ì„œ ìƒíƒœ ë°œí–‰ (REST API ì‚¬ìš©)"""
