@@ -19,4 +19,4 @@ bashio::log.info "Update interval: ${UPDATE_INTERVAL}s"
 
 # Python 애플리케이션 실행
 cd /app
-python3 -u app/main.py
+python3 -u /app/main.py

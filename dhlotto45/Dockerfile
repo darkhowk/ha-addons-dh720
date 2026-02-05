@@ -9,6 +9,9 @@ ENV LANG=C.UTF-8 \
 # 작업 디렉토리
 WORKDIR /app
 
+# python/pip 설치 (base 이미지가 python을 포함하지 않는 경우 대비)
+RUN apk add --no-cache python3 py3-pip
+
 # requirements 복사 및 설치
 COPY requirements.txt .
 RUN pip3 install --no-cache-dir --upgrade pip && \

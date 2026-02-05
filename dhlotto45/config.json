@@ -1,6 +1,6 @@
 {
   "name": "DH Lotto 45",
-  "version": "0.3.1",
+  "version": "0.3.4",
   "slug": "dhlotto45",
   "description": "동행복권 로또 6/45 통합 애드온",
   "url": "https://github.com/redchupa/dhlotto45-addon",
@@ -40,6 +40,5 @@
   "host_network": false,
   "privileged": [],
   "full_access": false,
-  "apparmor": true,
-  "image": "ghcr.io/{arch}-dhlotto45-addon"
+  "apparmor": true
 }
