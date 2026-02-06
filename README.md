@@ -50,8 +50,8 @@ Home Assistant에서 동행복권 로또 6/45를 자동으로 구매하고 분�
 3. Configuration 탭에서 설정:
 
 ```yaml
-username: "동행복권_아이디"
-password: "동행복권_비밀번호"
+username: ""  # 동행복권 아이디
+password: ""  # 동행복권 비밀번호
 enable_lotto645: true
 update_interval: 3600  # 센서 업데이트 주기 (초), 기본값: 3600 (1시간)
 use_mqtt: true  # MQTT Discovery 사용
