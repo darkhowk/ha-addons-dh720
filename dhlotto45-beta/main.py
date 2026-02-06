@@ -323,6 +323,7 @@ async def init_client():
                 mqtt_url=os.getenv("MQTT_URL", "mqtt://homeassistant.local:1883"),
                 username=os.getenv("MQTT_USERNAME"),
                 password=os.getenv("MQTT_PASSWORD"),
+                user_id=config["username"],
             )
             if mqtt_client.connect():
                 logger.info(" MQTT Discovery initialized successfully")

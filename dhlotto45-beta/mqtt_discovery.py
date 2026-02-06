@@ -18,21 +18,24 @@ TOPIC_PREFIX = "dhlotto_beta"
 class MQTTDiscovery:
     """MQTT Discovery helper class"""
     
-    def __init__(self, mqtt_url: str, username: Optional[str] = None, password: Optional[str] = None):
+    def __init__(self, mqtt_url: str, username: Optional[str] = None, password: Optional[str] = None, user_id: Optional[str] = None):
         """Initialize MQTT Discovery
         
         Args:
             mqtt_url: MQTT URL (e.g., "mqtt://192.168.1.118:1883" or "homeassistant.local:1883")
             username: MQTT username (optional)
             password: MQTT password (optional)
+            user_id: DH Lottery username for unique client_id (optional)
         """
         # Parse MQTT URL
         self.broker, self.port = self._parse_mqtt_url(mqtt_url)
         self.username_mqtt = username
         self.password_mqtt = password
+        self.user_id = user_id
         self.client: Optional[mqtt.Client] = None
         self.connected = False
         self.connecting = False
+        self._reconnect_count = 0
     
     @staticmethod
     def _parse_mqtt_url(mqtt_url: str) -> tuple:
@@ -61,7 +64,22 @@ class MQTTDiscovery:
         
         try:
             self.connecting = True
-            self.client = mqtt.Client(client_id="dhlottery_addon", protocol=mqtt.MQTTv311)
+            
+            # Create unique client_id to avoid conflicts
+            import uuid
+            if self.user_id:
+                client_id = f"dhlottery_beta_{self.user_id}_{uuid.uuid4().hex[:8]}"
+            else:
+                client_id = f"dhlottery_beta_addon_{uuid.uuid4().hex[:8]}"
+            
+            _LOGGER.info(f"Creating MQTT client with ID: {client_id}")
+            
+            # Create client with unique ID and clean session
+            self.client = mqtt.Client(
+                client_id=client_id,
+                clean_session=True,
+                protocol=mqtt.MQTTv311
+            )
             
             if self.username_mqtt and self.password_mqtt:
                 self.client.username_pw_set(self.username_mqtt, self.password_mqtt)
@@ -69,12 +87,15 @@ class MQTTDiscovery:
             self.client.on_connect = self._on_connect
             self.client.on_disconnect = self._on_disconnect
             
+            # Enable automatic reconnection
+            self.client.reconnect_delay_set(min_delay=1, max_delay=120)
+            
             _LOGGER.info(f"Connecting to MQTT broker: {self.broker}:{self.port}")
             self.client.connect(self.broker, self.port, 60)
             self.client.loop_start()
             
-            # Wait for connection (max 5 seconds)
-            timeout = 5
+            # Wait for connection (max 10 seconds)
+            timeout = 10
             start_time = time.time()
             while not self.connected and (time.time() - start_time) < timeout:
                 time.sleep(0.1)
@@ -86,9 +107,11 @@ class MQTTDiscovery:
             
             _LOGGER.info("Successfully connected to MQTT broker")
             self.connecting = False
+            self._reconnect_count = 0
             return True
+            
         except Exception as e:
-            _LOGGER.error(f"Failed to connect to MQTT broker: {e}")
+            _LOGGER.error(f"Failed to connect to MQTT broker: {e}", exc_info=True)
             self.connecting = False
             return False
     
@@ -110,7 +133,17 @@ class MQTTDiscovery:
     def _on_disconnect(self, client, userdata, rc):
         """Callback when disconnected from MQTT broker"""
         self.connected = False
-        _LOGGER.warning(f"Disconnected from MQTT broker: {rc}")
+        
+        if rc != 0:
+            _LOGGER.warning(f"Unexpected disconnection from MQTT broker (rc={rc})")
+            self._reconnect_count += 1
+            
+            if self._reconnect_count <= 5:
+                _LOGGER.info(f"MQTT will attempt to reconnect automatically (attempt {self._reconnect_count})")
+            elif self._reconnect_count == 10:
+                _LOGGER.error("MQTT reconnection attempts exceeded 10. Check broker settings.")
+        else:
+            _LOGGER.info("Cleanly disconnected from MQTT broker")
     
     def publish_sensor_discovery(
         self,
