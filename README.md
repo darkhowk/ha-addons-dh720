@@ -61,6 +61,7 @@ mqtt_password: ""  # MQTT 비밀번호
 
 4. **Start** 클릭
 5. **Log** 탭에서 "Login successful" 확인
+★. 동행복권 사이트(www.dhlottery.co.kr)에 직접 들어가서 로그인하고 건전구매 서약하기 (필수)
 
 ---
 
