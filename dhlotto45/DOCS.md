@@ -50,7 +50,7 @@ username: "동행복권_아이디"
 password: "동행복권_비밀번호"
 enable_lotto645: true
 update_interval: 3600  # 센서 업데이트 주기 (초), 기본값: 3600 (1시간)
-use_mqtt: true  # MQTT Discovery 사용 (권장)
+use_mqtt: true  # MQTT Discovery 사용
 mqtt_url: "mqtt://homeassistant.local:1883"  # MQTT 브로커 주소
 mqtt_username: ""  # MQTT 사용자명
 mqtt_password: ""  # MQTT 비밀번호
