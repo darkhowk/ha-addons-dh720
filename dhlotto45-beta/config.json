@@ -1,7 +1,7 @@
 {
-  "name": "DH Lotto 45",
+  "name": "DH Lotto 45 (Beta)",
   "version": "0.9.1",
-  "slug": "dhlotto45",
+  "slug": "dhlotto45-beta",
   "description": "DH Lottery Lottoey 6/45 Add-on with MQTT Discovery",
   "url": "https://github.com/redchupa/ha-addons-dhlottery",
   "arch": ["amd64", "armv7", "aarch64"],
@@ -36,7 +36,7 @@
     "is_beta": "bool?"
   },
   "ports": {
-    "60099/tcp": 60099
+    "60199/tcp": 60199
   },
   "ports_description": {
     "60099/tcp": "Web UI and API"
@@ -46,7 +46,7 @@
   "hassio_role": "default",
   "auth_api": true,
   "ingress": true,
-  "ingress_port": 60099,
+  "ingress_port": 60199,
   "ingress_stream": false,
   "panel_icon": "mdi:ticket-confirmation",
   "panel_title": "DH Lottery",
