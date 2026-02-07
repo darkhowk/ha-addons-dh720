@@ -46,6 +46,7 @@ config = {
     "use_mqtt": os.getenv("USE_MQTT", "false").lower() == "true",
     "ha_url": os.getenv("HA_URL", "http://supervisor/core"),
     "supervisor_token": os.getenv("SUPERVISOR_TOKEN", ""),
+    "is_beta": os.getenv("IS_BETA", "false").lower() == "true",
 }
 
 client: Optional[DhLotteryClient] = None
@@ -516,32 +517,38 @@ async def init_client():
         
         # Initialize MQTT if enabled
         if config["use_mqtt"]:
-            logger.info(" Initializing MQTT Discovery...")
+            logger.info("⚡ Initializing MQTT Discovery...")
+            
+            # Determine client ID suffix for beta version
+            client_id_suffix = "_beta" if config["is_beta"] else ""
+            logger.info(f"MQTT Client ID suffix: '{client_id_suffix}'" if client_id_suffix else "MQTT Client ID: dhlottery_addon (stable)")
+            
             mqtt_client = MQTTDiscovery(
                 mqtt_url=os.getenv("MQTT_URL", "mqtt://homeassistant.local:1883"),
                 username=os.getenv("MQTT_USERNAME"),
                 password=os.getenv("MQTT_PASSWORD"),
+                client_id_suffix=client_id_suffix,
             )
             if mqtt_client.connect():
-                logger.info(" MQTT Discovery initialized successfully")
+                logger.info("✓ MQTT Discovery initialized successfully")
                 
                 # Register button entities
                 if config["enable_lotto645"]:
-                    logger.info(" Registering button entities...")
+                    logger.info("⚡ Registering button entities...")
                     await register_buttons()
                     
                     # Subscribe to button commands
-                    logger.info(" Subscribing to button commands...")
+                    logger.info("⚡ Subscribing to button commands...")
                     success = mqtt_client.subscribe_to_commands(
                         config["username"],
                         on_button_command
                     )
                     if success:
-                        logger.info(" Button command subscription successful")
+                        logger.info("✓ Button command subscription successful")
                     else:
-                        logger.error(" Button command subscription failed")
+                        logger.error("✗ Button command subscription failed")
             else:
-                logger.warning(" MQTT connection failed, falling back to REST API")
+                logger.warning("⚠ MQTT connection failed, falling back to REST API")
                 mqtt_client = None
         
         logger.info("Client initialized successfully")

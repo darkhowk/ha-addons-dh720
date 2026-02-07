@@ -18,18 +18,20 @@ TOPIC_PREFIX = "dhlotto"
 class MQTTDiscovery:
     """MQTT Discovery helper class"""
     
-    def __init__(self, mqtt_url: str, username: Optional[str] = None, password: Optional[str] = None):
+    def __init__(self, mqtt_url: str, username: Optional[str] = None, password: Optional[str] = None, client_id_suffix: str = ""):
         """Initialize MQTT Discovery
         
         Args:
             mqtt_url: MQTT URL (e.g., "mqtt://192.168.1.118:1883" or "homeassistant.local:1883")
             username: MQTT username (optional)
             password: MQTT password (optional)
+            client_id_suffix: Suffix for MQTT client ID to avoid conflicts (e.g., "_beta")
         """
         # Parse MQTT URL
         self.broker, self.port = self._parse_mqtt_url(mqtt_url)
         self.username_mqtt = username
         self.password_mqtt = password
+        self.client_id_suffix = client_id_suffix
         self.client: Optional[mqtt.Client] = None
         self.connected = False
         self.connecting = False
@@ -61,7 +63,9 @@ class MQTTDiscovery:
         
         try:
             self.connecting = True
-            self.client = mqtt.Client(client_id="dhlottery_addon", protocol=mqtt.MQTTv311)
+            # Create unique client ID with suffix to avoid conflicts
+            client_id = f"dhlottery_addon{self.client_id_suffix}"
+            self.client = mqtt.Client(client_id=client_id, protocol=mqtt.MQTTv311)
             
             if self.username_mqtt and self.password_mqtt:
                 self.client.username_pw_set(self.username_mqtt, self.password_mqtt)
@@ -69,7 +73,7 @@ class MQTTDiscovery:
             self.client.on_connect = self._on_connect
             self.client.on_disconnect = self._on_disconnect
             
-            _LOGGER.info(f"Connecting to MQTT broker: {self.broker}:{self.port}")
+            _LOGGER.info(f"Connecting to MQTT broker: {self.broker}:{self.port} (client_id: {client_id})")
             self.client.connect(self.broker, self.port, 60)
             self.client.loop_start()
             
@@ -188,7 +192,7 @@ class MQTTDiscovery:
             config["json_attributes_topic"] = json_attributes_topic
         
         try:
-            payload = json.dumps(config)
+            payload = json.dumps(config, ensure_ascii=False)
             result = self.client.publish(discovery_topic, payload, qos=1, retain=True)
             result.wait_for_publish()
             return True
@@ -222,7 +226,7 @@ class MQTTDiscovery:
             # Publish attributes if provided
             if attributes:
                 attr_topic = f"homeassistant/sensor/{TOPIC_PREFIX}_{username}_{sensor_id}/attributes"
-                attr_payload = json.dumps(attributes)
+                attr_payload = json.dumps(attributes, ensure_ascii=False)
                 result = self.client.publish(attr_topic, attr_payload, qos=1, retain=True)
                 result.wait_for_publish()
             
@@ -317,7 +321,7 @@ class MQTTDiscovery:
             config["pattern"] = pattern
         
         try:
-            payload = json.dumps(config)
+            payload = json.dumps(config, ensure_ascii=False)
             _LOGGER.debug(f"Publishing input_text discovery: {discovery_topic}")
             _LOGGER.debug(f"Config: {payload}")
             result = self.client.publish(discovery_topic, payload, qos=1, retain=True)
@@ -386,7 +390,7 @@ class MQTTDiscovery:
             config["device_class"] = device_class
         
         try:
-            payload = json.dumps(config)
+            payload = json.dumps(config, ensure_ascii=False)
             _LOGGER.debug(f"Publishing button discovery: {discovery_topic}")
             _LOGGER.debug(f"Config: {payload}")
             result = self.client.publish(discovery_topic, payload, qos=1, retain=True)

@@ -14,6 +14,7 @@ export ENABLE_LOTTO645=$(bashio::config 'enable_lotto645')
 export UPDATE_INTERVAL=$(bashio::config 'update_interval')
 export USE_MQTT=$(bashio::config 'use_mqtt')
 export SUPERVISOR_TOKEN="${SUPERVISOR_TOKEN}"
+export IS_BETA=$(bashio::config 'is_beta' 'false')
 
 # MQTT configuration (optional)
 export MQTT_URL=$(bashio::config 'mqtt_url' 'mqtt://homeassistant.local:1883')
@@ -27,6 +28,7 @@ bashio::log.info "Configuration loaded"
 bashio::log.info "Username: ${USERNAME}"
 bashio::log.info "Update interval: ${UPDATE_INTERVAL}s"
 bashio::log.info "Use MQTT: ${USE_MQTT}"
+bashio::log.info "Beta version: ${IS_BETA}"
 
 if bashio::config.true 'use_mqtt'; then
     bashio::log.info "MQTT enabled - URL: ${MQTT_URL}"
