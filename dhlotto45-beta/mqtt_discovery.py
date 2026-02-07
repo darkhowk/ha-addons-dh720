@@ -12,30 +12,27 @@ import paho.mqtt.client as mqtt
 
 _LOGGER = logging.getLogger(__name__)
 
-TOPIC_PREFIX = "dhlotto_beta"
+TOPIC_PREFIX = "dhlotto"
 
 
 class MQTTDiscovery:
     """MQTT Discovery helper class"""
     
-    def __init__(self, mqtt_url: str, username: Optional[str] = None, password: Optional[str] = None, user_id: Optional[str] = None):
+    def __init__(self, mqtt_url: str, username: Optional[str] = None, password: Optional[str] = None):
         """Initialize MQTT Discovery
         
         Args:
             mqtt_url: MQTT URL (e.g., "mqtt://192.168.1.118:1883" or "homeassistant.local:1883")
             username: MQTT username (optional)
             password: MQTT password (optional)
-            user_id: DH Lottery username for unique client_id (optional)
         """
         # Parse MQTT URL
         self.broker, self.port = self._parse_mqtt_url(mqtt_url)
         self.username_mqtt = username
         self.password_mqtt = password
-        self.user_id = user_id
         self.client: Optional[mqtt.Client] = None
         self.connected = False
         self.connecting = False
-        self._reconnect_count = 0
     
     @staticmethod
     def _parse_mqtt_url(mqtt_url: str) -> tuple:
@@ -64,21 +61,7 @@ class MQTTDiscovery:
         
         try:
             self.connecting = True
-            
-            # Create unique client_id
-            import uuid
-            if self.user_id:
-                client_id = f"dhlottery_beta_{self.user_id}_{uuid.uuid4().hex[:8]}"
-            else:
-                client_id = f"dhlottery_beta_addon_{uuid.uuid4().hex[:8]}"
-            
-            _LOGGER.info(f"Creating MQTT client with ID: {client_id}")
-            
-            self.client = mqtt.Client(
-                client_id=client_id,
-                clean_session=True,
-                protocol=mqtt.MQTTv311
-            )
+            self.client = mqtt.Client(client_id="dhlottery_addon", protocol=mqtt.MQTTv311)
             
             if self.username_mqtt and self.password_mqtt:
                 self.client.username_pw_set(self.username_mqtt, self.password_mqtt)
@@ -86,14 +69,12 @@ class MQTTDiscovery:
             self.client.on_connect = self._on_connect
             self.client.on_disconnect = self._on_disconnect
             
-            self.client.reconnect_delay_set(min_delay=1, max_delay=120)
-            
             _LOGGER.info(f"Connecting to MQTT broker: {self.broker}:{self.port}")
             self.client.connect(self.broker, self.port, 60)
             self.client.loop_start()
             
-            # Wait for connection (max 10 seconds)
-            timeout = 10
+            # Wait for connection (max 5 seconds)
+            timeout = 5
             start_time = time.time()
             while not self.connected and (time.time() - start_time) < timeout:
                 time.sleep(0.1)
@@ -105,7 +86,6 @@ class MQTTDiscovery:
             
             _LOGGER.info("Successfully connected to MQTT broker")
             self.connecting = False
-            self._reconnect_count = 0
             return True
         except Exception as e:
             _LOGGER.error(f"Failed to connect to MQTT broker: {e}")
@@ -130,17 +110,7 @@ class MQTTDiscovery:
     def _on_disconnect(self, client, userdata, rc):
         """Callback when disconnected from MQTT broker"""
         self.connected = False
-        
-        if rc != 0:
-            _LOGGER.warning(f"Unexpected disconnection from MQTT broker (rc={rc})")
-            self._reconnect_count += 1
-            
-            if self._reconnect_count <= 5:
-                _LOGGER.info(f"MQTT will attempt to reconnect automatically (attempt {self._reconnect_count})")
-            elif self._reconnect_count == 10:
-                _LOGGER.error("MQTT reconnection attempts exceeded 10. Check broker settings.")
-        else:
-            _LOGGER.info("Cleanly disconnected from MQTT broker")
+        _LOGGER.warning(f"Disconnected from MQTT broker: {rc}")
     
     def publish_sensor_discovery(
         self,
@@ -178,7 +148,7 @@ class MQTTDiscovery:
         
         # Use default device if not specified
         if not device_name:
-            device_name = f"동행복권 애드온 ({username})"
+            device_name = f"ë™í–‰ë³µê¶Œ ì• ë“œì˜¨ ({username})"
         if not device_identifier:
             device_identifier = f"{TOPIC_PREFIX}_addon_{username}"
         
@@ -283,6 +253,81 @@ class MQTTDiscovery:
             _LOGGER.error(f"Failed to remove sensor {sensor_id}: {e}")
             return False
     
+    def publish_input_text_discovery(
+        self,
+        input_id: str,
+        name: str,
+        state_topic: str,
+        command_topic: str,
+        username: str,
+        device_name: str,
+        device_identifier: str,
+        icon: Optional[str] = None,
+        pattern: Optional[str] = None,
+        mode: str = "text",
+    ) -> bool:
+        """
+        Publish input_text discovery configuration
+        
+        Args:
+            input_id: Input text ID (e.g., 'manual_numbers')
+            name: Friendly name
+            state_topic: MQTT topic for state
+            command_topic: MQTT topic for commands
+            username: DH Lottery username
+            device_name: Device name
+            device_identifier: Device identifier
+            icon: Icon (e.g., 'mdi:numeric')
+            pattern: Regex pattern for validation
+            mode: Input mode ('text' or 'password')
+        """
+        if not self.connected:
+            _LOGGER.warning("Not connected to MQTT broker")
+            return False
+        
+        # Discovery topic: homeassistant/text/dhlotto_USERNAME_INPUT_ID/config
+        discovery_topic = f"homeassistant/text/{TOPIC_PREFIX}_{username}_{input_id}/config"
+        
+        # Unique ID: dhlotto_USERNAME_INPUT_ID
+        unique_id = f"{TOPIC_PREFIX}_{username}_{input_id}"
+        
+        # Entity ID: text.dhlotto_USERNAME_INPUT_ID
+        object_id = f"{TOPIC_PREFIX}_{username}_{input_id}"
+        
+        config = {
+            "name": name,
+            "unique_id": unique_id,
+            "object_id": object_id,
+            "state_topic": state_topic,
+            "command_topic": command_topic,
+            "mode": mode,
+            "device": {
+                "identifiers": [device_identifier],
+                "name": device_name,
+                "manufacturer": "DH Lottery",
+                "model": "Add-on",
+                "sw_version": "1.0.0",
+            },
+        }
+        
+        # Optional fields
+        if icon:
+            config["icon"] = icon
+        if pattern:
+            config["pattern"] = pattern
+        
+        try:
+            payload = json.dumps(config)
+            _LOGGER.debug(f"Publishing input_text discovery: {discovery_topic}")
+            _LOGGER.debug(f"Config: {payload}")
+            result = self.client.publish(discovery_topic, payload, qos=1, retain=True)
+            result.wait_for_publish()
+            _LOGGER.info(f"Published input_text discovery: text.{object_id}")
+            return True
+        except Exception as e:
+            _LOGGER.error(f"Failed to publish input_text discovery for {input_id}: {e}")
+            return False
+    
     def publish_button_discovery(
         self,
         button_id: str,
@@ -354,7 +399,7 @@ class MQTTDiscovery:
     
     def subscribe_to_commands(self, username: str, callback) -> bool:
         """
-        Subscribe to button command topics
+        Subscribe to button command topics and input text set topics
         
         Args:
             username: DH Lottery username
@@ -364,18 +409,28 @@ class MQTTDiscovery:
             _LOGGER.warning("Not connected to MQTT broker")
             return False
         
-        # Subscribe to Lotto 645 button commands only
-        button_ids = ["buy_auto_1", "buy_auto_5"]
+        # Subscribe to Lotto 645 button commands
+        button_ids = ["buy_auto_1", "buy_auto_5", "buy_manual"]
+        
+        # Subscribe to input text
+        input_ids = ["manual_numbers"]
         
         try:
             self.client.on_message = callback
             
+            # Subscribe to buttons
             for button_id in button_ids:
                 command_topic = f"homeassistant/button/{TOPIC_PREFIX}_{username}_{button_id}/command"
                 result = self.client.subscribe(command_topic)
-                _LOGGER.info(f"Subscribed to: {command_topic}")
+                _LOGGER.info(f"Subscribed to button: {command_topic}")
             
-            _LOGGER.info("Waiting for button press events...")
+            # Subscribe to input text
+            for input_id in input_ids:
+                set_topic = f"homeassistant/text/{TOPIC_PREFIX}_{username}_{input_id}/set"
+                result = self.client.subscribe(set_topic)
+                _LOGGER.info(f"Subscribed to input text: {set_topic}")
+            
+            _LOGGER.info("Waiting for button press and input text change events...")
             return True
         except Exception as e:
             _LOGGER.error(f"Failed to subscribe to commands: {e}")
