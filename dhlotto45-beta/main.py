@@ -1223,12 +1223,12 @@ async def update_sensors():
                                 "friendly_name": f"게임 {i} 당첨 결과",
                                 "icon": result_icon,
                             })
-                            logger.info(f"Game {i} result: {result_text} (ì¼ì¹˜: {matching_count}개, Rank: {rank})")
+                            logger.info(f"Game {i} result: {result_text} (일치: {matching_count}개, Rank: {rank})")
                             
                         except Exception as e:
                             logger.warning(f"Failed to check winning for game {i}: {e}")
                             # Publish default sensor on error
-                            await publish_sensor(f"lotto45_game_{i}_result", "í™•ì¸ 불가", {
+                            await publish_sensor(f"lotto45_game_{i}_result", "확인 불가", {
                                 "round_no": round_no,
                                 "my_numbers": game.numbers,
                                 "error": str(e),
