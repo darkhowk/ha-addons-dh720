@@ -12,13 +12,11 @@ import paho.mqtt.client as mqtt
 
 _LOGGER = logging.getLogger(__name__)
 
-TOPIC_PREFIX = "dhlotto"
-
 
 class MQTTDiscovery:
     """MQTT Discovery helper class"""
     
-    def __init__(self, mqtt_url: str, username: Optional[str] = None, password: Optional[str] = None, client_id_suffix: str = ""):
+    def __init__(self, mqtt_url: str, username: Optional[str] = None, password: Optional[str] = None, client_id_suffix: str = "", is_beta: bool = False):
         """Initialize MQTT Discovery
         
         Args:
@@ -26,15 +24,23 @@ class MQTTDiscovery:
             username: MQTT username (optional)
             password: MQTT password (optional)
             client_id_suffix: Suffix for MQTT client ID to avoid conflicts (e.g., "_beta")
+            is_beta: Whether this is a beta version (affects sensor prefix)
         """
         # Parse MQTT URL
         self.broker, self.port = self._parse_mqtt_url(mqtt_url)
         self.username_mqtt = username
         self.password_mqtt = password
         self.client_id_suffix = client_id_suffix
+        self.is_beta = is_beta
+        
+        # Set topic prefix based on beta status
+        self.topic_prefix = "dhlotto_beta" if is_beta else "dhlotto"
+        
         self.client: Optional[mqtt.Client] = None
         self.connected = False
         self.connecting = False
+        
+        _LOGGER.info(f"MQTT Discovery initialized with topic prefix: {self.topic_prefix}")
     
     @staticmethod
     def _parse_mqtt_url(mqtt_url: str) -> tuple:
@@ -154,16 +160,16 @@ class MQTTDiscovery:
         if not device_name:
             device_name = f"ë™í–‰ë³µê¶Œ ì• ë“œì˜¨ ({username})"
         if not device_identifier:
-            device_identifier = f"{TOPIC_PREFIX}_addon_{username}"
+            device_identifier = f"{self.topic_prefix}_addon_{username}"
         
         # Discovery topic: homeassistant/sensor/dhlotto_USERNAME_SENSOR_ID/config
-        discovery_topic = f"homeassistant/sensor/{TOPIC_PREFIX}_{username}_{sensor_id}/config"
+        discovery_topic = f"homeassistant/sensor/{self.topic_prefix}_{username}_{sensor_id}/config"
         
         # Unique ID: dhlotto_USERNAME_SENSOR_ID
-        unique_id = f"{TOPIC_PREFIX}_{username}_{sensor_id}"
+        unique_id = f"{self.topic_prefix}_{username}_{sensor_id}"
         
         # Entity ID: sensor.dhlotto_USERNAME_SENSOR_ID
-        object_id = f"{TOPIC_PREFIX}_{username}_{sensor_id}"
+        object_id = f"{self.topic_prefix}_{username}_{sensor_id}"
         
         config = {
             "name": name,
@@ -216,7 +222,7 @@ class MQTTDiscovery:
             return False
         
         # State topic
-        state_topic = f"homeassistant/sensor/{TOPIC_PREFIX}_{username}_{sensor_id}/state"
+        state_topic = f"homeassistant/sensor/{self.topic_prefix}_{username}_{sensor_id}/state"
         
         try:
             # Publish state
@@ -225,7 +231,7 @@ class MQTTDiscovery:
             
             # Publish attributes if provided
             if attributes:
-                attr_topic = f"homeassistant/sensor/{TOPIC_PREFIX}_{username}_{sensor_id}/attributes"
+                attr_topic = f"homeassistant/sensor/{self.topic_prefix}_{username}_{sensor_id}/attributes"
                 attr_payload = json.dumps(attributes, ensure_ascii=False)
                 result = self.client.publish(attr_topic, attr_payload, qos=1, retain=True)
                 result.wait_for_publish()
@@ -246,7 +252,7 @@ class MQTTDiscovery:
         if not self.connected:
             return False
         
-        discovery_topic = f"homeassistant/sensor/{TOPIC_PREFIX}_{username}_{sensor_id}/config"
+        discovery_topic = f"homeassistant/sensor/{self.topic_prefix}_{username}_{sensor_id}/config"
         
         try:
             result = self.client.publish(discovery_topic, "", qos=1, retain=True)
@@ -290,13 +296,13 @@ class MQTTDiscovery:
             return False
         
         # Discovery topic: homeassistant/text/dhlotto_USERNAME_INPUT_ID/config
-        discovery_topic = f"homeassistant/text/{TOPIC_PREFIX}_{username}_{input_id}/config"
+        discovery_topic = f"homeassistant/text/{self.topic_prefix}_{username}_{input_id}/config"
         
         # Unique ID: dhlotto_USERNAME_INPUT_ID
-        unique_id = f"{TOPIC_PREFIX}_{username}_{input_id}"
+        unique_id = f"{self.topic_prefix}_{username}_{input_id}"
         
         # Entity ID: text.dhlotto_USERNAME_INPUT_ID
-        object_id = f"{TOPIC_PREFIX}_{username}_{input_id}"
+        object_id = f"{self.topic_prefix}_{username}_{input_id}"
         
         config = {
             "name": name,
@@ -361,13 +367,13 @@ class MQTTDiscovery:
             return False
         
         # Discovery topic: homeassistant/button/dhlotto_USERNAME_BUTTON_ID/config
-        discovery_topic = f"homeassistant/button/{TOPIC_PREFIX}_{username}_{button_id}/config"
+        discovery_topic = f"homeassistant/button/{self.topic_prefix}_{username}_{button_id}/config"
         
         # Unique ID: dhlotto_USERNAME_BUTTON_ID
-        unique_id = f"{TOPIC_PREFIX}_{username}_{button_id}"
+        unique_id = f"{self.topic_prefix}_{username}_{button_id}"
         
         # Entity ID: button.dhlotto_USERNAME_BUTTON_ID
-        object_id = f"{TOPIC_PREFIX}_{username}_{button_id}"
+        object_id = f"{self.topic_prefix}_{username}_{button_id}"
         
         config = {
             "name": name,
@@ -424,13 +430,13 @@ class MQTTDiscovery:
             
             # Subscribe to buttons
             for button_id in button_ids:
-                command_topic = f"homeassistant/button/{TOPIC_PREFIX}_{username}_{button_id}/command"
+                command_topic = f"homeassistant/button/{self.topic_prefix}_{username}_{button_id}/command"
                 result = self.client.subscribe(command_topic)
                 _LOGGER.info(f"Subscribed to button: {command_topic}")
             
             # Subscribe to input text
             for input_id in input_ids:
-                set_topic = f"homeassistant/text/{TOPIC_PREFIX}_{username}_{input_id}/set"
+                set_topic = f"homeassistant/text/{self.topic_prefix}_{username}_{input_id}/set"
                 result = self.client.subscribe(set_topic)
                 _LOGGER.info(f"Subscribed to input text: {set_topic}")
             
@@ -468,12 +474,12 @@ async def publish_sensor_mqtt(
     icon = attributes.get("icon")
     
     # Prepare state topic
-    state_topic = f"homeassistant/sensor/{TOPIC_PREFIX}_{username}_{entity_id}/state"
+    state_topic = f"homeassistant/sensor/{mqtt_client.topic_prefix}_{username}_{entity_id}/state"
     
     # Prepare attributes topic
     json_attributes_topic = None
     if attributes:
-        json_attributes_topic = f"homeassistant/sensor/{TOPIC_PREFIX}_{username}_{entity_id}/attributes"
+        json_attributes_topic = f"homeassistant/sensor/{mqtt_client.topic_prefix}_{username}_{entity_id}/attributes"
     
     # Only log important sensors
     is_important = "purchase" in entity_id or "latest" in entity_id

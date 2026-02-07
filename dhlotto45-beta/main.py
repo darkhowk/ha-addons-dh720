@@ -150,12 +150,12 @@ async def register_buttons():
     main_device_id = f"dhlotto_addon_{username}"
     
     # Button 1: Buy 1 Auto Game (Lotto 6/45)
-    button1_topic = f"homeassistant/button/dhlotto_{username}_buy_auto_1/command"
+    button1_topic = f"homeassistant/button/{mqtt_client.topic_prefix}_{username}_buy_auto_1/command"
     logger.info(f"[BUTTON] Button 1 command topic: {button1_topic}")
     
     success1 = mqtt_client.publish_button_discovery(
         button_id="buy_auto_1",
-        name="1ê²Œìž„ ìžë™ êµ¬ë§¤",
+        name="1게임 ìžë™ êµ¬ë§¤",
         command_topic=button1_topic,
         username=username,
         device_name=main_device_name,
@@ -168,12 +168,12 @@ async def register_buttons():
         logger.error("[BUTTON] Failed to register button: buy_auto_1")
     
     # Button 2: Buy 5 Auto Games (Lotto 6/45, Max)
-    button2_topic = f"homeassistant/button/dhlotto_{username}_buy_auto_5/command"
+    button2_topic = f"homeassistant/button/{mqtt_client.topic_prefix}_{username}_buy_auto_5/command"
     logger.info(f"[BUTTON] Button 2 command topic: {button2_topic}")
     
     success2 = mqtt_client.publish_button_discovery(
         button_id="buy_auto_5",
-        name="5ê²Œìž„ ìžë™ êµ¬ë§¤",
+        name="5게임 ìžë™ êµ¬ë§¤",
         command_topic=button2_topic,
         username=username,
         device_name=main_device_name,
@@ -186,7 +186,7 @@ async def register_buttons():
         logger.error("[BUTTON] Failed to register button: buy_auto_5")
     
     # Button 3: Buy Manual Game (Lotto 6/45)
-    button3_topic = f"homeassistant/button/dhlotto_{username}_buy_manual/command"
+    button3_topic = f"homeassistant/button/{mqtt_client.topic_prefix}_{username}_buy_manual/command"
     logger.info(f"[BUTTON] Button 3 command topic: {button3_topic}")
     
     success3 = mqtt_client.publish_button_discovery(
@@ -204,8 +204,8 @@ async def register_buttons():
         logger.error("[BUTTON] Failed to register button: buy_manual")
     
     # Input Text: Manual Numbers
-    input_state_topic = f"homeassistant/text/dhlotto_{username}_manual_numbers/state"
-    input_command_topic = f"homeassistant/text/dhlotto_{username}_manual_numbers/set"
+    input_state_topic = f"homeassistant/text/{mqtt_client.topic_prefix}_{username}_manual_numbers/state"
+    input_command_topic = f"homeassistant/text/{mqtt_client.topic_prefix}_{username}_manual_numbers/set"
     
     success4 = mqtt_client.publish_input_text_discovery(
         input_id="manual_numbers",
@@ -250,7 +250,7 @@ def on_button_command(client_mqtt, userdata, message):
             
             # Publish back to state topic
             username = config["username"]
-            state_topic = f"homeassistant/text/dhlotto_{username}_manual_numbers/state"
+            state_topic = f"homeassistant/text/{mqtt_client.topic_prefix}_{username}_manual_numbers/state"
             client_mqtt.publish(state_topic, payload, qos=1, retain=True)
             logger.info(f"[INPUT] Published state: {payload}")
             return
@@ -490,7 +490,7 @@ async def execute_button_purchase(button_id: str):
             "error": str(e),
             "button_id": button_id,
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "friendly_name": "êµ¬ë§¤ ì˜¤ë¥˜",
+            "friendly_name": "구매 오류",
             "icon": "mdi:alert-circle",
         }
         
@@ -528,6 +528,7 @@ async def init_client():
                 username=os.getenv("MQTT_USERNAME"),
                 password=os.getenv("MQTT_PASSWORD"),
                 client_id_suffix=client_id_suffix,
+                is_beta=config["is_beta"],
             )
             if mqtt_client.connect():
                 logger.info("✓ MQTT Discovery initialized successfully")
@@ -1114,7 +1115,7 @@ async def update_sensors():
                         "result": latest_purchase.result,
                         "games": games_info,
                         "games_count": len(latest_purchase.games),
-                        "friendly_name": "ìµœê·¼ êµ¬ë§¤",
+                        "friendly_name": "최근 구매",
                         "icon": "mdi:receipt-text",
                     })
                     
@@ -1149,7 +1150,7 @@ async def update_sensors():
                             "numbers": game.numbers,
                             "round_no": round_no,
                             "result": game_info['result'],
-                            "friendly_name": f"ê²Œìž„ {i}",
+                            "friendly_name": f"게임 {i}",
                             "icon": f"mdi:numeric-{i}-box-multiple",
                         })
                         logger.info(f"Game {i} ({game.slot}): {numbers_str} - {game.mode} (Round {round_no})")
@@ -1200,7 +1201,7 @@ async def update_sensors():
                                     result_icon = "mdi:cash"
                                     result_color = "green"
                                 else:
-                                    result_text = "ë‚™ì²¨"
+                                    result_text = "낙첨"
                                     result_icon = "mdi:close-circle-outline"
                                     result_color = "red"
                             
@@ -1215,7 +1216,7 @@ async def update_sensors():
                                 "rank": rank,
                                 "result": result_text,
                                 "color": result_color,
-                                "friendly_name": f"ê²Œìž„ {i} ë‹¹ì²¨ ê²°ê³¼",
+                                "friendly_name": f"게임 {i} 당첨 결과",
                                 "icon": result_icon,
                             })
                             logger.info(f"Game {i} result: {result_text} (ì¼ì¹˜: {matching_count}ê°œ, Rank: {rank})")
@@ -1227,7 +1228,7 @@ async def update_sensors():
                                 "round_no": round_no,
                                 "my_numbers": game.numbers,
                                 "error": str(e),
-                                "friendly_name": f"ê²Œìž„ {i} ë‹¹ì²¨ ê²°ê³¼",
+                                "friendly_name": f"게임 {i} 당첨 결과",
                                 "icon": "mdi:alert-circle-outline",
                             })
                     
