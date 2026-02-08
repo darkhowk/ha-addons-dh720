@@ -144,7 +144,7 @@ class DhLotteryClient:
 
     async def async_login(self):
         """Login 수행합니다."""
-        _LOGGER.info("Login ")
+        _LOGGER.info("Starting login process...")
         
         if not self.session or self.session.closed:
             self._create_session()
@@ -166,19 +166,19 @@ class DhLotteryClient:
             
             # Login 성공 확인
             final_url = str(resp.url)
-            _LOGGER.info(f"Login   URL: {final_url}")
-            _LOGGER.info(f" : {resp.status} {resp.reason}")
+            _LOGGER.info(f"Login final URL: {final_url}")
+            _LOGGER.info(f"Status: {resp.status} {resp.reason}")
             
             # 리다렉트 히스토리 확인
             if resp.history:
-                _LOGGER.info(f" : {len(resp.history)}")
+                _LOGGER.info(f"Redirects: {len(resp.history)}")
                 for i, redirect_resp in enumerate(resp.history):
                     _LOGGER.debug(f"  {i+1}. {redirect_resp.status} -> {redirect_resp.url}")
             
             # 성공 조건: 200 OK고 URL loginSuccess.do 포함
             if resp.status == 200 and 'loginSuccess.do' in final_url:
                 self.logged_in = True
-                _LOGGER.info("Login !")
+                _LOGGER.info("Login successful!")
                 return
             
             # failed 처리
@@ -202,7 +202,7 @@ class DhLotteryClient:
             raise
         except Exception as ex:
             self.logged_in = False
-            _LOGGER.exception("Login   ")
+            _LOGGER.exception("Login exception occurred")
             raise DhLotteryError(f"[ERROR] Login execute failed: {ex}") from ex
 
     async def _async_set_select_rsa_module(self) -> None:
@@ -218,10 +218,10 @@ class DhLotteryClient:
                 self._rsa_key.set_public(
                     data.get("rsaModulus"), data.get("publicExponent")
                 )
-                _LOGGER.info("RSA  API .")
+                _LOGGER.info("RSA key fetched from API.")
                 return
         except Exception as e:
-            _LOGGER.warning(f"API RSA   failed: {e}, Login page  ")
+            _LOGGER.warning(f"API RSA key fetch failed: {e}, trying login page")
         
         # API failed 시 Login page서 RSA 키 파싱
         try:
@@ -238,12 +238,12 @@ class DhLotteryClient:
                     modulus_match.group(1),
                     exponent_match.group(1)
                 )
-                _LOGGER.info("RSA  Login page .")
+                _LOGGER.info("RSA key parsed from login page.")
                 return
             else:
-                raise DhLotteryError("Login page RSA    .")
+                raise DhLotteryError("RSA key not found in login page.")
         except Exception as ex:
-            raise DhLotteryError(f"RSA  fetch failed: {ex}") from ex
+            raise DhLotteryError(f"RSA key fetch failed: {ex}") from ex
 
     async def async_get_balance(self) -> DhLotteryBalanceData:
         """Balance status query합니다."""
