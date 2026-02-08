@@ -2,22 +2,34 @@
 
 bashio::log.info "Starting Lotto 45 Add-on v2.0.0 (Multi-Account)..."
 
-# Load accounts from configuration
-ACCOUNTS=$(bashio::config 'accounts')
-export ACCOUNTS="${ACCOUNTS}"
-
-bashio::log.info "Loaded accounts configuration"
-
-# Count accounts
-ACCOUNT_COUNT=$(echo "${ACCOUNTS}" | jq '. | length')
+# Build accounts JSON array properly
+ACCOUNT_COUNT=$(bashio::config 'accounts | length')
 bashio::log.info "Total accounts: ${ACCOUNT_COUNT}"
 
-# Log each account (without password)
+# Build JSON array manually
+ACCOUNTS_JSON="["
 for i in $(seq 0 $((ACCOUNT_COUNT - 1))); do
-    USERNAME=$(echo "${ACCOUNTS}" | jq -r ".[$i].username")
-    ENABLED=$(echo "${ACCOUNTS}" | jq -r ".[$i].enabled")
+    USERNAME=$(bashio::config "accounts[${i}].username")
+    PASSWORD=$(bashio::config "accounts[${i}].password")
+    ENABLED=$(bashio::config "accounts[${i}].enabled")
+    
+    # Default enabled to true if not set
+    if [ -z "${ENABLED}" ] || [ "${ENABLED}" == "null" ]; then
+        ENABLED="true"
+    fi
+    
     bashio::log.info "  Account $((i+1)): ${USERNAME} (enabled: ${ENABLED})"
+    
+    # Add to JSON array
+    if [ $i -gt 0 ]; then
+        ACCOUNTS_JSON="${ACCOUNTS_JSON},"
+    fi
+    ACCOUNTS_JSON="${ACCOUNTS_JSON}{\"username\":\"${USERNAME}\",\"password\":\"${PASSWORD}\",\"enabled\":${ENABLED}}"
 done
+ACCOUNTS_JSON="${ACCOUNTS_JSON}]"
+
+export ACCOUNTS="${ACCOUNTS_JSON}"
+bashio::log.info "Accounts JSON built successfully"
 
 # Other configuration
 export ENABLE_LOTTO645=$(bashio::config 'enable_lotto645')
@@ -33,13 +45,16 @@ export MQTT_PASSWORD=$(bashio::config 'mqtt_password' '')
 # Home Assistant URL
 export HA_URL="http://supervisor/core"
 
-bashio::log.info "Update interval: ${UPDATE_INTERVAL}s"
-bashio::log.info "Use MQTT: ${USE_MQTT}"
+bashio::log.info "Configuration loaded:"
+bashio::log.info "  Update interval: ${UPDATE_INTERVAL}s"
+bashio::log.info "  Lotto 645 enabled: ${ENABLE_LOTTO645}"
+bashio::log.info "  Use MQTT: ${USE_MQTT}"
 
 if bashio::config.true 'use_mqtt'; then
-    bashio::log.info "MQTT enabled - URL: ${MQTT_URL}"
+    bashio::log.info "  MQTT URL: ${MQTT_URL}"
 fi
 
 # Run Python application
+bashio::log.info "Starting application..."
 cd /app
 python3 -u /app/main.py
