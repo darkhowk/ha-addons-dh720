@@ -842,47 +842,6 @@ async def update_sensors():
             "icon": "mdi:wallet",
         })
         
-        # Weekly purchase limit sensors
-        try:
-            # Get this week's purchase history
-            history_items = await client.async_get_buy_list('LO40')
-            
-            # Count ALL purchases this week (pending or drawn)
-            # ltWnResult values: "" (pending), "낙첨" (no win), "1등" (1st prize), etc.
-            this_week_buy_count = sum([
-                item.get("prchsQty", 0)
-                for item in history_items
-            ])
-            
-            weekly_limit = 5
-            remaining_count = max(0, weekly_limit - this_week_buy_count)
-            
-            # Weekly purchase count
-            await publish_sensor("lotto45_weekly_purchase_count", this_week_buy_count, {
-                "friendly_name": "Weekly Purchase Count",
-                "unit_of_measurement": "games",
-                "icon": "mdi:counter",
-            })
-            
-            # Weekly remaining
-            await publish_sensor("lotto45_weekly_remaining", remaining_count, {
-                "friendly_name": "Weekly Remaining Purchases",
-                "unit_of_measurement": "games",
-                "icon": "mdi:ticket-confirmation" if remaining_count > 0 else "mdi:close-circle",
-            })
-            
-            # Weekly limit (fixed)
-            await publish_sensor("lotto45_weekly_limit", weekly_limit, {
-                "friendly_name": "Weekly Purchase Limit",
-                "unit_of_measurement": "games",
-                "icon": "mdi:numeric-5-circle",
-            })
-            
-            logger.info(f"Weekly purchases: {this_week_buy_count}/{weekly_limit} (remaining: {remaining_count})")
-            
-        except Exception as e:
-            logger.warning(f"Failed to get weekly purchase count: {e}")
-
         
         # 2. Update lotto statistics
         if config["enable_lotto645"] and analyzer:
@@ -1159,6 +1118,9 @@ async def update_sensors():
                     # Get latest round info for comparison
                     latest_round_no = await lotto_645.async_get_latest_round_no()
                     
+                    # Counter for weekly purchases (Pending games)
+                    weekly_purchase_count = 0
+                    
                     for i, game_info in enumerate(all_games, 1):
                         game = game_info['game']
                         round_no = game_info['round_no']
@@ -1225,6 +1187,9 @@ async def update_sensors():
                                     result_text = "No Win"
                                     result_icon = "mdi:close-circle-outline"
                                     result_color = "red"
+                            else:
+                                # Game not drawn yet - count as weekly purchase
+                                weekly_purchase_count += 1
                             
                             # Publish winning result sensor
                             await publish_sensor(f"lotto45_game_{i}_result", result_text, {
@@ -1264,6 +1229,20 @@ async def update_sensors():
                         "friendly_name": "Purchase History Count",
                         "icon": "mdi:counter",
                     })
+                    
+                    # Publish weekly purchase count sensor (based on Pending games)
+                    weekly_limit = 5
+                    remaining_count = max(0, weekly_limit - weekly_purchase_count)
+                    
+                    await publish_sensor("lotto45_weekly_purchase_count", weekly_purchase_count, {
+                        "weekly_limit": weekly_limit,
+                        "remaining": remaining_count,
+                        "friendly_name": "Weekly Purchase Count",
+                        "unit_of_measurement": "games",
+                        "icon": "mdi:ticket-confirmation" if remaining_count > 0 else "mdi:close-circle",
+                    })
+                    
+                    logger.info(f"Weekly purchases: {weekly_purchase_count}/{weekly_limit} (remaining: {remaining_count})")
                     
             except Exception as e:
                 logger.warning(f"Failed to get purchase history: {e}")
