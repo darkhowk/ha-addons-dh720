@@ -1,8 +1,8 @@
 {
   "name": "DH Lotto 45",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "slug": "dhlotto45",
-  "description": "DH Lottery Lottoey 6/45 Add-on with MQTT Discovery",
+  "description": "DH Lottery Lottoey 6/45 Add-on with MQTT Discovery - Multi-Account Support",
   "url": "https://github.com/redchupa/ha-addons-dhlottery",
   "arch": ["amd64", "armv7", "aarch64"],
   "build_from": {
@@ -14,8 +14,13 @@
   "boot": "auto",
   "init": false,
   "options": {
-    "username": "",
-    "password": "",
+    "accounts": [
+      {
+        "username": "",
+        "password": "",
+        "enabled": true
+      }
+    ],
     "enable_lotto645": true,
     "update_interval": 3600,
     "use_mqtt": true,
@@ -24,8 +29,13 @@
     "mqtt_password": ""
   },
   "schema": {
-    "username": "str",
-    "password": "password",
+    "accounts": [
+      {
+        "username": "str",
+        "password": "password",
+        "enabled": "bool?"
+      }
+    ],
     "enable_lotto645": "bool",
     "update_interval": "int(60,86400)?",
     "use_mqtt": "bool?",

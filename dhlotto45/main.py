@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
 """
-Lotto 45 Add-on Main Application v0.6.8
+Lotto 45 Add-on Main Application v2.0.0
 Home Assistant Add-on for DH Lottery 6/45
-v0.6.8 - Optimized logging and added prize detail sensors
+v2.0.0 - Multi-account support
 """
 
 import os
 import asyncio
 import logging
-from typing import Optional
+from typing import Optional, Dict, List
 from datetime import date, datetime, timezone
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
@@ -16,7 +16,7 @@ from fastapi.responses import HTMLResponse
 import uvicorn
 
 from dh_lottery_client import DhLotteryClient
-from dh_lotto_645 import DhLotto645
+from dh_lotto_645 import DhLotto645, DhLotto645SelMode
 from dh_lotto_analyzer import DhLottoAnalyzer
 from mqtt_discovery import MQTTDiscovery, publish_sensor_mqtt
 
@@ -28,10 +28,21 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Account data structure
+class AccountData:
+    def __init__(self, username: str, password: str, enabled: bool = True):
+        self.username = username
+        self.password = password
+        self.enabled = enabled
+        self.client: Optional[DhLotteryClient] = None
+        self.lotto_645: Optional[DhLotto645] = None
+        self.analyzer: Optional[DhLottoAnalyzer] = None
+        self.manual_numbers_state = "auto,auto,auto,auto,auto,auto"
+        self.update_task: Optional[asyncio.Task] = None
+
 # Configuration variables
 config = {
-    "username": os.getenv("USERNAME", ""),
-    "password": os.getenv("PASSWORD", ""),
+    "accounts": [],  # Will be populated from env
     "enable_lotto645": os.getenv("ENABLE_LOTTO645", "true").lower() == "true",
     "update_interval": int(os.getenv("UPDATE_INTERVAL", "3600")),
     "use_mqtt": os.getenv("USE_MQTT", "false").lower() == "true",
@@ -40,15 +51,33 @@ config = {
     "is_beta": os.getenv("IS_BETA", "false").lower() == "true",
 }
 
-client: Optional[DhLotteryClient] = None
-lotto_645: Optional[DhLotto645] = None
-analyzer: Optional[DhLottoAnalyzer] = None
+# Global variables
+accounts: Dict[str, AccountData] = {}  # username -> AccountData
 mqtt_client: Optional[MQTTDiscovery] = None
 event_loop: Optional[asyncio.AbstractEventLoop] = None
 
 
+def load_accounts_from_env():
+    """Load accounts from environment variables"""
+    import json
+    
+    accounts_json = os.getenv("ACCOUNTS", "[]")
+    try:
+        accounts_list = json.loads(accounts_json)
+        config["accounts"] = accounts_list
+        logger.info(f"Loaded {len(accounts_list)} account(s) from configuration")
+        
+        for i, acc in enumerate(accounts_list, 1):
+            username = acc.get("username", "")
+            enabled = acc.get("enabled", True)
+            logger.info(f"  Account {i}: {username} (enabled: {enabled})")
+    except Exception as e:
+        logger.error(f"Failed to parse accounts from environment: {e}")
+        config["accounts"] = []
+
+
 # ============================================================================
-# Helper Functions (for component compatibility)
+# Helper Functions
 # ============================================================================
 
 def _safe_int(value) -> int:
@@ -92,210 +121,263 @@ def _get_lotto645_item(data: dict) -> dict:
     """Extract lotto645 result data"""
     if not data:
         return {}
-    # Use _raw if available
     if "_raw" in data:
         return data["_raw"]
-    # Use data.list[0] structure
     items = data.get("list", [])
     if items:
         return items[0]
     return data
 
 
-def _translate_result(result: str) -> str:
-    """Translate lottery result to English"""
-    if not result:
-        return "Unknown"
-    
-    # Direct mapping based on common patterns
-    result_map = {
-        "": "Pending",
-        "T": "No Win",
-        "1": "1st Prize",
-        "2": "2nd Prize",
-        "3": "3rd Prize",
-        "4": "4th Prize",
-        "5": "5th Prize",
-    }
-    
-    return result_map.get(result, result)
-
-
-async def register_buttons():
-    """Register button entities via MQTT Discovery"""
+async def register_buttons_for_account(account: AccountData):
+    """Register button entities for a specific account"""
     if not mqtt_client or not mqtt_client.connected:
-        logger.warning("[BUTTON] MQTT not connected, skipping button registration")
+        logger.warning(f"[BUTTON][{account.username}] MQTT not connected, skipping button registration")
         return
     
-    username = config["username"]
-    logger.info(f"[BUTTON] Registering button entities for user: {username}")
+    username = account.username
+    logger.info(f"[BUTTON][{username}] Registering button entities")
     
-    # Lotto 6/45 buttons only - using main device
-    # Add beta suffix to device name if beta version
+    # Device name with beta suffix if needed
     device_suffix = " (Beta)" if config.get("is_beta", False) else ""
-    main_device_name = f"DH Lottery Addon{device_suffix} ({username})"
-    main_device_id = f"dhlotto_addon_{username}"
+    device_name = f"DH Lottery Addon{device_suffix} ({username})"
+    device_id = f"dhlotto_addon_{username}"
     
-    logger.info(f"[BUTTON] Topic prefix: {mqtt_client.topic_prefix}")
-    logger.info(f"[BUTTON] Device name: {main_device_name}")
-    
-    # Button 1: Buy 1 Auto Game (Lotto 6/45)
+    # Button 1: Buy 1 Auto Game
     button1_topic = f"homeassistant/button/{mqtt_client.topic_prefix}_{username}_buy_auto_1/command"
-    logger.info(f"[BUTTON] Button 1 command topic: {button1_topic}")
-    
-    success1 = mqtt_client.publish_button_discovery(
+    mqtt_client.publish_button_discovery(
         button_id="buy_auto_1",
         name="Buy 1 Auto Game",
         command_topic=button1_topic,
         username=username,
-        device_name=main_device_name,
-        device_identifier=main_device_id,
+        device_name=device_name,
+        device_identifier=device_id,
         icon="mdi:ticket-confirmation",
     )
-    if success1:
-        logger.info("[BUTTON] Button registered: buy_auto_1")
-    else:
-        logger.error("[BUTTON] Failed to register button: buy_auto_1")
     
-    # Button 2: Buy 5 Auto Games (Lotto 6/45, Max)
+    # Button 2: Buy 5 Auto Games
     button2_topic = f"homeassistant/button/{mqtt_client.topic_prefix}_{username}_buy_auto_5/command"
-    logger.info(f"[BUTTON] Button 2 command topic: {button2_topic}")
-    
-    success2 = mqtt_client.publish_button_discovery(
+    mqtt_client.publish_button_discovery(
         button_id="buy_auto_5",
         name="Buy 5 Auto Games",
         command_topic=button2_topic,
         username=username,
-        device_name=main_device_name,
-        device_identifier=main_device_id,
+        device_name=device_name,
+        device_identifier=device_id,
         icon="mdi:ticket-confirmation-outline",
     )
-    if success2:
-        logger.info("[BUTTON] Button registered: buy_auto_5")
-    else:
-        logger.error("[BUTTON] Failed to register button: buy_auto_5")
     
-    # Button 3: Buy Manual Game (Lotto 6/45)
+    # Button 3: Buy Manual Game
     button3_topic = f"homeassistant/button/{mqtt_client.topic_prefix}_{username}_buy_manual/command"
-    logger.info(f"[BUTTON] Button 3 command topic: {button3_topic}")
-    
-    success3 = mqtt_client.publish_button_discovery(
+    mqtt_client.publish_button_discovery(
         button_id="buy_manual",
         name="Buy 1 Manual Game",
         command_topic=button3_topic,
         username=username,
-        device_name=main_device_name,
-        device_identifier=main_device_id,
+        device_name=device_name,
+        device_identifier=device_id,
         icon="mdi:hand-pointing-right",
     )
-    if success3:
-        logger.info("[BUTTON] Button registered: buy_manual")
-    else:
-        logger.error("[BUTTON] Failed to register button: buy_manual")
     
     # Input Text: Manual Numbers
     input_state_topic = f"homeassistant/text/{mqtt_client.topic_prefix}_{username}_manual_numbers/state"
     input_command_topic = f"homeassistant/text/{mqtt_client.topic_prefix}_{username}_manual_numbers/set"
     
-    success4 = mqtt_client.publish_input_text_discovery(
+    mqtt_client.publish_input_text_discovery(
         input_id="manual_numbers",
         name="Manual Numbers Input",
         state_topic=input_state_topic,
         command_topic=input_command_topic,
         username=username,
-        device_name=main_device_name,
-        device_identifier=main_device_id,
+        device_name=device_name,
+        device_identifier=device_id,
         icon="mdi:numeric",
         mode="text",
     )
-    if success4:
-        logger.info("[INPUT] Input text registered: manual_numbers")
-        # Publish initial state
-        mqtt_client.client.publish(input_state_topic, "auto,auto,auto,auto,auto,auto", qos=1, retain=True)
-    else:
-        logger.error("[INPUT] Failed to register input text: manual_numbers")
     
-    if success1 and success2 and success3 and success4:
-        logger.info("[BUTTON] All Lotto 645 buttons and input text registered successfully")
-        logger.info(f"[BUTTON] Device: {main_device_name}")
-    else:
-        logger.warning("[BUTTON] Some buttons or input text failed to register")
+    # Publish initial state
+    mqtt_client.client.publish(input_state_topic, "auto,auto,auto,auto,auto,auto", qos=1, retain=True)
+    
+    logger.info(f"[BUTTON][{username}] All buttons and input text registered")
+
 
 def on_button_command(client_mqtt, userdata, message):
     """Handle MQTT button commands and input text changes"""
-    global manual_numbers_state
-    
     try:
         topic = message.topic
         payload = message.payload.decode()
         
         logger.info(f"[MQTT] Received message: topic={topic}, payload={payload}")
         
-        # Check if this is an input_text set command
+        # Extract username from topic
+        # Format: homeassistant/button/dhlotto_USERNAME_BUTTON_ID/command
+        #     or: homeassistant/text/dhlotto_USERNAME_INPUT_ID/set
+        parts = topic.split("/")
+        if len(parts) < 3:
+            logger.error(f"[MQTT] Invalid topic format: {topic}")
+            return
+        
+        entity_id_full = parts[2]  # dhlotto_USERNAME_...
+        
+        # Extract username (between dhlotto_ and the last underscore)
+        if not entity_id_full.startswith(mqtt_client.topic_prefix + "_"):
+            logger.error(f"[MQTT] Invalid entity ID: {entity_id_full}")
+            return
+        
+        # Remove prefix
+        without_prefix = entity_id_full[len(mqtt_client.topic_prefix) + 1:]  # Remove "dhlotto_"
+        
+        # Find the account username
+        username = None
+        for acc_username in accounts.keys():
+            if without_prefix.startswith(acc_username + "_"):
+                username = acc_username
+                break
+        
+        if not username:
+            logger.error(f"[MQTT] Could not extract username from: {entity_id_full}")
+            return
+        
+        if username not in accounts:
+            logger.error(f"[MQTT] Unknown account: {username}")
+            return
+        
+        account = accounts[username]
+        
+        # Check if this is input_text
         if "/text/" in topic and "/set" in topic:
-            # This is input_text value change
-            logger.info(f"[INPUT] Manual numbers updated: {payload}")
-            manual_numbers_state = payload
+            logger.info(f"[INPUT][{username}] Manual numbers updated: {payload}")
+            account.manual_numbers_state = payload
             
             # Publish back to state topic
-            username = config["username"]
             state_topic = f"homeassistant/text/{mqtt_client.topic_prefix}_{username}_manual_numbers/state"
             client_mqtt.publish(state_topic, payload, qos=1, retain=True)
-            logger.info(f"[INPUT] Published state: {payload}")
             return
         
         # Handle button commands
-        # Extract button_id from topic
-        # Format: homeassistant/button/dhlotto_USERNAME_BUTTON_ID/command
-        parts = topic.split("/")
-        if len(parts) >= 3:
-            entity_id = parts[2]  # dhlotto_USERNAME_BUTTON_ID
-            logger.info(f"[BUTTON] Entity ID: {entity_id}")
-            
-            # Extract button_id (buy_auto_1, buy_auto_5, buy_manual)
-            parts_entity = entity_id.split("_")
-            logger.info(f"[BUTTON] Entity parts: {parts_entity}")
-            
-            if len(parts_entity) >= 3:
-                # Extract last 2 or 3 parts depending on button type
-                if "manual" in entity_id:
-                    button_id = "buy_manual"
-                else:
-                    # Extract last 3 parts: buy_auto_1
-                    button_id = "_".join(parts_entity[-3:])
-                
-                logger.info(f"[BUTTON] Button pressed: {button_id}")
-                
-                # Execute purchase in background using the event loop
-                if event_loop and event_loop.is_running():
-                    asyncio.run_coroutine_threadsafe(
-                        execute_button_purchase(button_id), 
-                        event_loop
-                    )
-                    logger.info(f"[BUTTON] Purchase task scheduled for {button_id}")
-                else:
-                    logger.error("[BUTTON] Event loop not available or not running")
-            else:
-                logger.error(f"[BUTTON] Invalid entity_id format: {entity_id}")
+        # Extract button_id
+        button_suffix = without_prefix[len(username) + 1:]  # Remove "username_"
+        
+        logger.info(f"[BUTTON][{username}] Button pressed: {button_suffix}")
+        
+        # Execute purchase
+        if event_loop and event_loop.is_running():
+            asyncio.run_coroutine_threadsafe(
+                execute_button_purchase(account, button_suffix),
+                event_loop
+            )
         else:
-            logger.error(f"[BUTTON] Invalid topic format: {topic}")
+            logger.error(f"[BUTTON][{username}] Event loop not available")
     
     except Exception as e:
         logger.error(f"[MQTT] Error handling message: {e}", exc_info=True)
 
 
-# Global variable to store manual numbers state
-manual_numbers_state = "auto,auto,auto,auto,auto,auto"
+async def execute_button_purchase(account: AccountData, button_id: str):
+    """Execute purchase for a specific account"""
+    username = account.username
+    logger.info(f"[PURCHASE][{username}] Starting purchase for button: {button_id}")
+    
+    if not account.lotto_645:
+        logger.error(f"[PURCHASE][{username}] Lotto 645 not enabled")
+        return
+    
+    try:
+        import random
+        
+        # Determine purchase mode
+        if button_id == "buy_manual":
+            # Manual purchase
+            manual_numbers_text = account.manual_numbers_state
+            if not manual_numbers_text:
+                error_msg = "Please enter manual numbers"
+                logger.error(f"[PURCHASE][{username}] {error_msg}")
+                await publish_purchase_error(account, error_msg)
+                return
+            
+            logger.info(f"[PURCHASE][{username}] Manual numbers input: {manual_numbers_text}")
+            
+            # Parse input
+            try:
+                parts = [p.strip() for p in manual_numbers_text.split(",")]
+                
+                if len(parts) != 6:
+                    error_msg = f"Must provide exactly 6 values (current: {len(parts)})"
+                    logger.error(f"[PURCHASE][{username}] {error_msg}")
+                    await publish_purchase_error(account, error_msg)
+                    return
+                
+                manual_numbers = []
+                auto_count = 0
+                
+                for part in parts:
+                    if part.lower() == "auto":
+                        auto_count += 1
+                    else:
+                        try:
+                            num = int(part)
+                            if num <= 0 or num >= 46:
+                                error_msg = f"Numbers must be 1-45 (input: {num})"
+                                logger.error(f"[PURCHASE][{username}] {error_msg}")
+                                await publish_purchase_error(account, error_msg)
+                                return
+                            manual_numbers.append(num)
+                        except ValueError:
+                            error_msg = f"Invalid input: {part}"
+                            logger.error(f"[PURCHASE][{username}] {error_msg}")
+                            await publish_purchase_error(account, error_msg)
+                            return
+                
+                # Check duplicates
+                if len(manual_numbers) != len(set(manual_numbers)):
+                    error_msg = "Duplicate numbers found"
+                    logger.error(f"[PURCHASE][{username}] {error_msg}")
+                    await publish_purchase_error(account, error_msg)
+                    return
+                
+                # Determine mode
+                if auto_count == 0:
+                    mode = DhLotto645SelMode.MANUAL
+                    final_numbers = sorted(manual_numbers)
+                elif auto_count == 6:
+                    mode = DhLotto645SelMode.AUTO
+                    final_numbers = []
+                else:
+                    mode = DhLotto645SelMode.SEMI_AUTO
+                    final_numbers = sorted(manual_numbers)
+                
+                slots = [DhLotto645.Slot(mode=mode, numbers=final_numbers)]
+                
+            except Exception as e:
+                error_msg = f"Error processing input: {str(e)}"
+                logger.error(f"[PURCHASE][{username}] {error_msg}", exc_info=True)
+                await publish_purchase_error(account, error_msg)
+                return
+        else:
+            # Auto purchase
+            count = 5 if button_id == "buy_auto_5" else 1
+            logger.info(f"[PURCHASE][{username}] Creating {count} auto game slots")
+            slots = [DhLotto645.Slot(mode=DhLotto645SelMode.AUTO, numbers=[]) for _ in range(count)]
+        
+        # Execute purchase
+        logger.info(f"[PURCHASE][{username}] Executing purchase: {len(slots)} game(s)")
+        result = await account.lotto_645.async_buy(slots)
+        
+        logger.info(f"[PURCHASE][{username}] Purchase successful!")
+        logger.info(f"[PURCHASE][{username}] Round: {result.round_no}, Barcode: {result.barcode}")
+        
+        # Update sensors
+        await update_sensors_for_account(account)
+        
+        logger.info(f"[PURCHASE][{username}] Purchase completed!")
+        
+    except Exception as e:
+        logger.error(f"[PURCHASE][{username}] Purchase failed: {e}", exc_info=True)
+        await publish_purchase_error(account, str(e))
 
 
-async def get_manual_numbers_from_mqtt() -> Optional[str]:
-    """Get manual numbers from MQTT state"""
-    global manual_numbers_state
-    return manual_numbers_state
-
-
-async def publish_purchase_error(error_message: str):
-    """Publish purchase error as sensor"""
+async def publish_purchase_error(account: AccountData, error_message: str):
+    """Publish purchase error for a specific account"""
     error_data = {
         "error": error_message,
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -303,258 +385,114 @@ async def publish_purchase_error(error_message: str):
         "icon": "mdi:alert-circle",
     }
     
-    logger.info(f"[PURCHASE] Publishing error sensor: {error_message}")
-    await publish_sensor("lotto45_purchase_error", error_message[:255], error_data)
+    await publish_sensor_for_account(
+        account,
+        "lotto45_purchase_error",
+        error_message[:255],
+        error_data
+    )
 
 
-async def execute_button_purchase(button_id: str):
-    """Execute purchase based on button_id"""
-    logger.info(f"[PURCHASE] Starting purchase for button_id: {button_id}")
+async def init_account(account: AccountData) -> bool:
+    """Initialize a single account"""
+    username = account.username
     
-    # Lotto 6/45 purchase only
-    if not lotto_645:
-        logger.error("[PURCHASE] Lotto 645 not enabled")
-        return
-    
-    try:
-        from dh_lotto_645 import DhLotto645, DhLotto645SelMode
-        import random
-        
-        # Determine purchase mode
-        if button_id == "buy_manual":
-            # Manual purchase - read from input_text
-            logger.info(f"[PURCHASE] Manual purchase requested")
-            
-            # Get manual numbers from MQTT state topic
-            manual_numbers_text = await get_manual_numbers_from_mqtt()
-            if not manual_numbers_text:
-                error_msg = "Please enter manual numbers"
-                logger.error(f"[PURCHASE] {error_msg}")
-                await publish_purchase_error(error_msg)
-                return
-            
-            logger.info(f"[PURCHASE] Manual numbers input: {manual_numbers_text}")
-            
-            # Parse and validate input
-            try:
-                # Split by comma
-                parts = [p.strip() for p in manual_numbers_text.split(",")]
-                
-                if len(parts) != 6:
-                    error_msg = f"Must provide exactly 6 values (current: {len(parts)})"
-                    logger.error(f"[PURCHASE] {error_msg}")
-                    await publish_purchase_error(error_msg)
-                    return
-                
-                # Validate each part and collect manual numbers only
-                manual_numbers = []
-                auto_count = 0
-                
-                for i, part in enumerate(parts):
-                    if part.lower() == "auto":
-                        auto_count += 1
-                    else:
-                        # Try to convert to integer
-                        try:
-                            num = int(part)
-                            
-                            # Validate range
-                            if num <= 0:
-                                error_msg = f"Number must be greater than 0 (input: {num})"
-                                logger.error(f"[PURCHASE] {error_msg}")
-                                await publish_purchase_error(error_msg)
-                                return
-                            
-                            if num >= 46:
-                                error_msg = f"Number must be 45 or less (input: {num})"
-                                logger.error(f"[PURCHASE] {error_msg}")
-                                await publish_purchase_error(error_msg)
-                                return
-                            
-                            manual_numbers.append(num)
-                        except ValueError:
-                            # Check if it's a float
-                            try:
-                                float(part)
-                                error_msg = f"Only integers allowed (input: {part})"
-                                logger.error(f"[PURCHASE] {error_msg}")
-                                await publish_purchase_error(error_msg)
-                                return
-                            except ValueError:
-                                error_msg = f"Invalid input. Only 1-45 numbers or 'auto' allowed (input: {part})"
-                                logger.error(f"[PURCHASE] {error_msg}")
-                                await publish_purchase_error(error_msg)
-                                return
-                
-                # Check for duplicates in manual numbers
-                if len(manual_numbers) != len(set(manual_numbers)):
-                    error_msg = "Duplicate numbers found in manual input"
-                    logger.error(f"[PURCHASE] {error_msg}")
-                    await publish_purchase_error(error_msg)
-                    return
-                
-                # Determine mode and prepare slot
-                if auto_count == 0:
-                    # All manual - must have exactly 6 numbers
-                    if len(manual_numbers) != 6:
-                        error_msg = f"Must provide exactly 6 numbers for full manual mode (current: {len(manual_numbers)})"
-                        logger.error(f"[PURCHASE] {error_msg}")
-                        await publish_purchase_error(error_msg)
-                        return
-                    mode = DhLotto645SelMode.MANUAL
-                    final_numbers = sorted(manual_numbers)
-                    logger.info(f"[PURCHASE] Mode: MANUAL, Numbers: {final_numbers}")
-                elif auto_count == 6:
-                    # All auto
-                    mode = DhLotto645SelMode.AUTO
-                    final_numbers = []
-                    logger.info(f"[PURCHASE] Mode: AUTO")
-                else:
-                    # Semi-auto - send only manual numbers, server will fill the rest
-                    mode = DhLotto645SelMode.SEMI_AUTO
-                    final_numbers = sorted(manual_numbers)
-                    logger.info(f"[PURCHASE] Mode: SEMI_AUTO, Manual numbers: {final_numbers}, Auto count: {auto_count}")
-                
-                # Create slot
-                slots = [DhLotto645.Slot(mode=mode, numbers=final_numbers)]
-                
-            except Exception as e:
-                error_msg = f"Error processing input: {str(e)}"
-                logger.error(f"[PURCHASE] {error_msg}", exc_info=True)
-                await publish_purchase_error(error_msg)
-                return
-                
-        else:
-            # Auto purchase
-            # Determine number of games
-            count = 1
-            if button_id == "buy_auto_5":
-                count = 5
-            elif button_id == "buy_auto_1":
-                count = 1
-            else:
-                logger.warning(f"[PURCHASE] Unknown button_id: {button_id}, defaulting to 1 game")
-                count = 1
-            
-            logger.info(f"[PURCHASE] Creating {count} auto game slots...")
-            
-            # Create auto game slots
-            slots = [DhLotto645.Slot(mode=DhLotto645SelMode.AUTO, numbers=[]) for _ in range(count)]
-        
-        logger.info(f"[PURCHASE] Executing purchase: {len(slots)} game(s)...")
-        
-        # Execute purchase
-        result = await lotto_645.async_buy(slots)
-        
-        logger.info(f"[PURCHASE] Purchase successful!")
-        logger.info(f"[PURCHASE] Round: {result.round_no}")
-        logger.info(f"[PURCHASE] Barcode: {result.barcode}")
-        logger.info(f"[PURCHASE] Issue Date: {result.issue_dt}")
-        logger.info(f"[PURCHASE] Games: {len(result.games)}")
-        
-        # Format games for logging
-        for game in result.games:
-            logger.info(f"[PURCHASE]   Slot {game.slot}: {game.numbers} ({game.mode})")
-        
-        # Update all sensors immediately to reflect the purchase
-        logger.info(f"[PURCHASE] Updating all sensors...")
-        await update_sensors()
-        
-        logger.info(f"[PURCHASE] Purchase completed successfully!")
-        
-    except Exception as e:
-        logger.error(f"[PURCHASE] Purchase failed: {e}", exc_info=True)
-        
-        # Send error notification
-        error_data = {
-            "error": str(e),
-            "button_id": button_id,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "friendly_name": "구매 오류",
-            "icon": "mdi:alert-circle",
-        }
-        
-        logger.info(f"[PURCHASE] Publishing error sensor...")
-        await publish_sensor("lotto45_purchase_error", str(e)[:255], error_data)
-
-
-async def init_client():
-    """Initialize client"""
-    global client, lotto_645, analyzer, mqtt_client
-    
-    if not config["username"] or not config["password"]:
-        logger.error("Username or password not configured")
+    if not account.enabled:
+        logger.info(f"[INIT][{username}] Account disabled, skipping")
         return False
     
     try:
-        logger.info("Initializing DH Lottery client v0.6.8...")
-        client = DhLotteryClient(config["username"], config["password"])
-        await client.async_login()
+        logger.info(f"[INIT][{username}] Initializing account...")
+        account.client = DhLotteryClient(account.username, account.password)
+        await account.client.async_login()
         
         if config["enable_lotto645"]:
-            lotto_645 = DhLotto645(client)
-            analyzer = DhLottoAnalyzer(client)
+            account.lotto_645 = DhLotto645(account.client)
+            account.analyzer = DhLottoAnalyzer(account.client)
         
-        # Initialize MQTT if enabled
-        if config["use_mqtt"]:
-            logger.info("âš¡ Initializing MQTT Discovery...")
-            
-            # Determine client ID suffix for beta version
-            client_id_suffix = "_beta" if config["is_beta"] else ""
-            logger.info(f"MQTT Client ID suffix: '{client_id_suffix}'" if client_id_suffix else "MQTT Client ID: dhlottery_addon")
-            
-            mqtt_client = MQTTDiscovery(
-                mqtt_url=os.getenv("MQTT_URL", "mqtt://homeassistant.local:1883"),
-                username=os.getenv("MQTT_USERNAME"),
-                password=os.getenv("MQTT_PASSWORD"),
-                client_id_suffix=client_id_suffix,
-            )
-            if mqtt_client.connect():
-                logger.info("âœ“ MQTT Discovery initialized successfully")
-                
-                # Register button entities
-                if config["enable_lotto645"]:
-                    logger.info("âš¡ Registering button entities...")
-                    await register_buttons()
-                    
-                    # Subscribe to button commands
-                    logger.info("âš¡ Subscribing to button commands...")
-                    success = mqtt_client.subscribe_to_commands(
-                        config["username"],
-                        on_button_command
-                    )
-                    if success:
-                        logger.info("âœ“ Button command subscription successful")
-                    else:
-                        logger.error("âœ— Button command subscription failed")
-            else:
-                logger.warning("âš  MQTT connection failed, falling back to REST API")
-                mqtt_client = None
-        
-        logger.info("Client initialized successfully")
+        logger.info(f"[INIT][{username}] Account initialized successfully")
         return True
     except Exception as e:
-        logger.error(f"Failed to initialize client: {e}", exc_info=True)
+        logger.error(f"[INIT][{username}] Failed to initialize: {e}", exc_info=True)
         return False
 
 
-async def cleanup_client():
-    """Clean up client"""
-    global client, mqtt_client
+async def init_clients():
+    """Initialize all client accounts"""
+    global mqtt_client
+    
+    load_accounts_from_env()
+    
+    if not config["accounts"]:
+        logger.error("No accounts configured")
+        return False
+    
+    # Initialize each account
+    success_count = 0
+    for acc_config in config["accounts"]:
+        username = acc_config.get("username", "")
+        password = acc_config.get("password", "")
+        enabled = acc_config.get("enabled", True)
+        
+        if not username or not password:
+            logger.warning(f"Skipping account with missing credentials")
+            continue
+        
+        account = AccountData(username, password, enabled)
+        accounts[username] = account
+        
+        if await init_account(account):
+            success_count += 1
+    
+    logger.info(f"Initialized {success_count}/{len(accounts)} account(s)")
+    
+    # Initialize MQTT
+    if config["use_mqtt"]:
+        logger.info("Initializing MQTT Discovery...")
+        
+        client_id_suffix = "_beta" if config["is_beta"] else ""
+        mqtt_client = MQTTDiscovery(
+            mqtt_url=os.getenv("MQTT_URL", "mqtt://homeassistant.local:1883"),
+            username=os.getenv("MQTT_USERNAME"),
+            password=os.getenv("MQTT_PASSWORD"),
+            client_id_suffix=client_id_suffix,
+        )
+        
+        if mqtt_client.connect():
+            logger.info("MQTT Discovery initialized successfully")
+            
+            # Register buttons for each account
+            for account in accounts.values():
+                if account.enabled and config["enable_lotto645"]:
+                    await register_buttons_for_account(account)
+            
+            # Subscribe to commands
+            if accounts:
+                first_username = list(accounts.keys())[0]
+                mqtt_client.subscribe_to_commands(first_username, on_button_command)
+        else:
+            logger.warning("MQTT connection failed")
+            mqtt_client = None
+    
+    return success_count > 0
+
+
+async def cleanup_clients():
+    """Clean up all clients"""
+    global mqtt_client
     
     if mqtt_client:
         try:
             mqtt_client.disconnect()
-            logger.info("MQTT client disconnected")
         except Exception as e:
-            logger.error(f"Error disconnecting MQTT client: {e}")
+            logger.error(f"Error disconnecting MQTT: {e}")
     
-    if client:
-        try:
-            await client.close()
-            logger.info("Client session closed")
-        except Exception as e:
-            logger.error(f"Error closing client session: {e}")
+    for account in accounts.values():
+        if account.client:
+            try:
+                await account.client.close()
+            except Exception as e:
+                logger.error(f"Error closing client for {account.username}: {e}")
 
 
 @asynccontextmanager
@@ -562,277 +500,77 @@ async def lifespan(app: FastAPI):
     """Application lifecycle manager"""
     global event_loop
     
-    # Startup
-    logger.info("Starting Lotto 45 Add-on v0.6.8...")
-    logger.info(f"Configuration: username={config['username']}, "
-                f"enable_lotto645={config['enable_lotto645']}, "
-                f"update_interval={config['update_interval']}")
+    logger.info("Starting Lotto 45 Add-on v2.0.0 (Multi-Account)...")
     
-    # Get and store the event loop
     event_loop = asyncio.get_running_loop()
-    logger.info(f"Event loop stored: {event_loop}")
     
-    # Initialize client
-    await init_client()
+    await init_clients()
     
-    # Start background task
-    task = asyncio.create_task(background_tasks())
+    # Start background tasks for each account
+    tasks = []
+    for account in accounts.values():
+        if account.enabled:
+            task = asyncio.create_task(background_tasks_for_account(account))
+            account.update_task = task
+            tasks.append(task)
     
     logger.info("Add-on started successfully")
     
     yield
     
-    # Shutdown
-    logger.info("Shutting down Lotto 45 Add-on...")
-    task.cancel()
-    try:
-        await task
-    except asyncio.CancelledError:
-        pass
-    await cleanup_client()
-    logger.info("Add-on shut down successfully")
+    logger.info("Shutting down...")
+    for task in tasks:
+        task.cancel()
+    await asyncio.gather(*tasks, return_exceptions=True)
+    await cleanup_clients()
+    logger.info("Shutdown complete")
 
 
 # FastAPI app
 app = FastAPI(
-    title="Lotto 45",
-    version="0.6.8",
+    title="Lotto 45 Multi-Account",
+    version="2.0.0",
     lifespan=lifespan
 )
 
 
-@app.get("/api-docs", response_class=HTMLResponse)
-async def custom_docs():
-    """Custom API documentation page for Ingress mode"""
-    return """
-    <!DOCTYPE html>
-    <html>
-        <head>
-            <meta charset="UTF-8">
-            <title>API Documentation - Lotto 45</title>
-            <style>
-                body { font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; }
-                h1 { color: #333; }
-                .endpoint { background: #f5f5f5; padding: 15px; margin: 10px 0; border-radius: 5px; }
-                .method { display: inline-block; padding: 3px 8px; border-radius: 3px; font-weight: bold; color: white; margin-right: 10px; }
-                .get { background: #61affe; }
-                .post { background: #49cc90; }
-                code { background: #f0f0f0; padding: 2px 6px; border-radius: 3px; font-family: monospace; }
-                pre { background: #f5f5f5; padding: 10px; border-radius: 5px; overflow-x: auto; font-size: 13px; }
-                .note { background: #fff3cd; padding: 10px; border-left: 4px solid #ffc107; margin: 20px 0; }
-            </style>
-        </head>
-        <body>
-            <h1>ðŸ“Š API Documentation</h1>
-            
-            <div class="note">
-                <strong>ðŸ’¡ Tip:</strong> For full interactive Swagger UI, access directly via port:<br>
-                <code>http://homeassistant.local:60099/docs</code>
-            </div>
-            
-            <h2>Available Endpoints</h2>
-            
-            <div class="endpoint">
-                <span class="method get">GET</span> <strong>/health</strong>
-                <p>Health check endpoint - returns system status</p>
-                <pre>Response:
-{
-  "status": "ok",
-  "logged_in": true,
-  "username": "your_id",
-  "lotto645_enabled": true,
-  "version": "0.6.8"
-}</pre>
-            </div>
-            
-            <div class="endpoint">
-                <span class="method get">GET</span> <strong>/balance</strong>
-                <p>Get account balance information</p>
-                <pre>Response:
-{
-  "deposit": 100000,
-  "purchase_available": 95000,
-  "reservation_purchase": 0,
-  "withdrawal_request": 5000,
-  "purchase_impossible": 5000,
-  "this_month_accumulated_purchase": 50000
-}</pre>
-            </div>
-            
-            <div class="endpoint">
-                <span class="method get">GET</span> <strong>/stats</strong>
-                <p>Get lottery statistics (frequency analysis, hot/cold numbers, purchase stats)</p>
-                <pre>Response:
-{
-  "frequency": [
-    {"number": 16, "count": 11, "percentage": 22.0},
-    ...
-  ],
-  "hot_numbers": [16, 1, 24, 27, 3, ...],
-  "cold_numbers": [11, 13, 18, 21, 22, ...],
-  "purchase_stats": {
-    "total_purchase_count": 100,
-    "total_winning_amount": 50000,
-    "win_rate": 10.0,
-    "roi": -50.0
-  }
-}</pre>
-            </div>
-            
-            <div class="endpoint">
-                <span class="method post">POST</span> <strong>/random?count=6&games=1</strong>
-                <p>Generate random lottery numbers</p>
-                <p><strong>Parameters:</strong></p>
-                <ul>
-                    <li><code>count</code> - Number of numbers to generate (1-45, default: 6)</li>
-                    <li><code>games</code> - Number of games (1-5, default: 1)</li>
-                </ul>
-                <pre>Response:
-{
-  "numbers": [
-    [1, 5, 12, 23, 34, 42],
-    [3, 8, 15, 27, 33, 41]
-  ]
-}</pre>
-            </div>
-            
-            <div class="endpoint">
-                <span class="method post">POST</span> <strong>/check</strong>
-                <p>Check if your numbers won</p>
-                <pre>Request Body:
-{
-  "numbers": [1, 2, 3, 4, 5, 6],
-  "round_no": 1000  // optional, defaults to latest
-}
-
-Response:
-{
-  "round_no": 1000,
-  "my_numbers": [1, 2, 3, 4, 5, 6],
-  "winning_numbers": [7, 8, 9, 10, 11, 12],
-  "bonus_number": 13,
-  "matching_count": 0,
-  "bonus_match": false,
-  "rank": 0,
-  "is_winner": false
-}</pre>
-            </div>
-            
-            <div class="endpoint">
-                <span class="method post">POST</span> <strong>/buy</strong>
-                <p>Buy lottery tickets (1-5 games per purchase)</p>
-                <pre>Request Body:
-[
-  {"mode": "Auto"},
-  {"mode": "Manual", "numbers": [1, 7, 12, 23, 34, 41]},
-  {"mode": "Semi-Auto", "numbers": [3, 9, 15]}
-]
-
-Modes:
-- "Auto" (ìžë™): System picks all 6 numbers
-- "Manual" (ìˆ˜ë™): You pick all 6 numbers
-- "Semi-Auto" (ë°˜ìžë™): You pick some, system fills the rest
-
-Response:
-{
-  "success": true,
-  "round_no": 1122,
-  "barcode": "59865 36399 04155 63917 56431 42167",
-  "issue_dt": "2024/05/28 í™” 17:55:27",
-  "games": [...]
-}</pre>
-            </div>
-            
-            <div class="endpoint">
-                <span class="method post">POST</span> <strong>/buy/auto?count=1</strong>
-                <p>Quick buy with auto-selected numbers</p>
-                <p><strong>Parameters:</strong></p>
-                <ul>
-                    <li><code>count</code> - Number of games to purchase (1-5)</li>
-                </ul>
-                <pre>Response: Same as /buy endpoint</pre>
-            </div>
-            
-            <div class="endpoint">
-                <span class="method get">GET</span> <strong>/buy/history</strong>
-                <p>Get purchase history from the last week</p>
-                <pre>Response:
-{
-  "count": 2,
-  "items": [
-    {
-      "round_no": 1122,
-      "barcode": "...",
-      "result": "ë¯¸ì¶”ì²¨",
-      "games": [...]
-    }
-  ]
-}</pre>
-            </div>
-            
-            <h2>Testing with cURL</h2>
-            <p>Example cURL commands:</p>
-            <pre># Health check
-curl http://homeassistant.local:60099/health
-
-# Get balance
-curl http://homeassistant.local:60099/balance
-
-# Generate random numbers
-curl -X POST "http://homeassistant.local:60099/random?count=6&games=2"
-
-# Buy 3 auto tickets
-curl -X POST "http://homeassistant.local:60099/buy/auto?count=3"</pre>
-            
-            <h2>Access Full Swagger UI</h2>
-            <p>For interactive API testing with Swagger UI:</p>
-            <ol>
-                <li>Access the add-on directly via port 60099</li>
-                <li>Navigate to: <code>http://homeassistant.local:60099/docs</code></li>
-                <li>Or use your Home Assistant IP: <code>http://YOUR_HA_IP:60099/docs</code></li>
-            </ol>
-            
-            <p><a href="/">ðŸ  Back to Home</a></p>
-        </body>
-    </html>
-    """
-
-
-async def background_tasks():
-    """Background tasks"""
+async def background_tasks_for_account(account: AccountData):
+    """Background tasks for a specific account"""
+    username = account.username
+    
     # Initial delay
     await asyncio.sleep(10)
     
     while True:
         try:
-            await update_sensors()
+            await update_sensors_for_account(account)
             await asyncio.sleep(config["update_interval"])
         except asyncio.CancelledError:
-            logger.info("Background task cancelled")
+            logger.info(f"[BG][{username}] Background task cancelled")
             break
         except Exception as e:
-            logger.error(f"Background task error: {e}", exc_info=True)
+            logger.error(f"[BG][{username}] Error: {e}", exc_info=True)
             await asyncio.sleep(60)
 
 
-async def update_sensors():
-    """Update sensors - improved version"""
-    if not client or not client.logged_in:
-        logger.warning("Client not logged in, attempting to login...")
+async def update_sensors_for_account(account: AccountData):
+    """Update sensors for a specific account"""
+    username = account.username
+    
+    if not account.client or not account.client.logged_in:
+        logger.warning(f"[SENSOR][{username}] Client not logged in, attempting login...")
         try:
-            await client.async_login()
+            await account.client.async_login()
         except Exception as e:
-            logger.error(f"Failed to login: {e}")
+            logger.error(f"[SENSOR][{username}] Login failed: {e}")
             return
     
     try:
-        logger.info("Updating sensors...")
+        logger.info(f"[SENSOR][{username}] Updating sensors...")
         
-        # 1. Get balance
-        balance = await client.async_get_balance()
-        
-        # Balance sensor
-        await publish_sensor("lotto45_balance", balance.deposit, {
+        # Balance
+        balance = await account.client.async_get_balance()
+        await publish_sensor_for_account(account, "lotto45_balance", balance.deposit, {
             "purchase_available": balance.purchase_available,
             "reservation_purchase": balance.reservation_purchase,
             "withdrawal_request": balance.withdrawal_request,
@@ -842,458 +580,81 @@ async def update_sensors():
             "icon": "mdi:wallet",
         })
         
-        # Purchase available time sensor (static information)
-        await publish_sensor("lotto45_purchase_available_time", 
-            "weekdays: 06:00-24:00, saturday: 06:00-20:00, sunday: 06:00-24:00", {
-            "weekdays": "06:00-24:00",
-            "saturday": "06:00-20:00",
-            "sunday": "06:00-24:00",
-            "friendly_name": "구매 가능 시간",
-            "icon": "mdi:clock-time-eight",
-        })
+        # Lotto statistics (if enabled)
+        if config["enable_lotto645"] and account.analyzer:
+            # Latest round info
+            latest_round_info = await account.lotto_645.async_get_round_info()
+            
+            # Winning numbers
+            winning_numbers = latest_round_info.numbers
+            bonus_number = latest_round_info.bonus_num
+            round_no = latest_round_info.round_no
+            winning_text = f"Round {round_no}: {', '.join(map(str, winning_numbers))} + {bonus_number}"
+            
+            await publish_sensor_for_account(account, "lotto645_winning_numbers", winning_text, {
+                "numbers": winning_numbers,
+                "bonus": bonus_number,
+                "round": round_no,
+                "friendly_name": "당첨 번호",
+                "icon": "mdi:trophy-award",
+            })
+            
+            # Purchase history
+            history = await account.lotto_645.async_get_buy_history_this_week()
+            if history:
+                latest_purchase = history[0]
+                games_info = [{
+                    "slot": g.slot,
+                    "mode": str(g.mode),
+                    "numbers": g.numbers
+                } for g in latest_purchase.games]
+                
+                await publish_sensor_for_account(account, "lotto45_latest_purchase", latest_purchase.round_no, {
+                    "round_no": latest_purchase.round_no,
+                    "barcode": latest_purchase.barcode,
+                    "result": latest_purchase.result,
+                    "games": games_info,
+                    "games_count": len(latest_purchase.games),
+                    "friendly_name": "최근 구매",
+                    "icon": "mdi:receipt-text",
+                })
         
-        
-        # 2. Update lotto statistics
-        if config["enable_lotto645"] and analyzer:
-            # Get lotto results
-            try:
-                # Get raw data with all prize information
-                params = {
-                    "_": int(datetime.now().timestamp() * 1000),
-                }
-                raw_data = await client.async_get('lt645/selectPstLt645Info.do', params)
-                
-                # Extract first item
-                items = raw_data.get('list', [])
-                if not items:
-                    raise Exception("No lotto data available")
-                
-                item = items[0]
-                
-                latest_round_info = await lotto_645.async_get_round_info()
-                lotto_result = {
-                    "_raw": {
-                        "ltEpsd": latest_round_info.round_no,
-                        "tm1WnNo": latest_round_info.numbers[0],
-                        "tm2WnNo": latest_round_info.numbers[1],
-                        "tm3WnNo": latest_round_info.numbers[2],
-                        "tm4WnNo": latest_round_info.numbers[3],
-                        "tm5WnNo": latest_round_info.numbers[4],
-                        "tm6WnNo": latest_round_info.numbers[5],
-                        "bnsWnNo": latest_round_info.bonus_num,
-                        "ltRflYmd": latest_round_info.draw_date,
-                    }
-                }
-                
-                # Lotto result sensors
-                result_item = _get_lotto645_item(lotto_result)
-                
-                # Round number
-                await publish_sensor("lotto645_round", _safe_int(result_item.get("ltEpsd")), {
-                    "friendly_name": "로또 회차",
-                    "icon": "mdi:counter",
-                })
-                
-                # Numbers 1-6
-                for i in range(1, 7):
-                    await publish_sensor(f"lotto645_number{i}", _safe_int(result_item.get(f"tm{i}WnNo")), {
-                        "friendly_name": f"로또 번호 {i}",
-                        "icon": f"mdi:numeric-{i}-circle",
-                    })
-                
-                # Bonus number
-                await publish_sensor("lotto645_bonus", _safe_int(result_item.get("bnsWnNo")), {
-                    "friendly_name": "보너스 번호",
-                    "icon": "mdi:star-circle",
-                })
-                
-                # Winning numbers combined (all 6 numbers + bonus)
-                winning_numbers = [
-                    _safe_int(result_item.get("tm1WnNo")),
-                    _safe_int(result_item.get("tm2WnNo")),
-                    _safe_int(result_item.get("tm3WnNo")),
-                    _safe_int(result_item.get("tm4WnNo")),
-                    _safe_int(result_item.get("tm5WnNo")),
-                    _safe_int(result_item.get("tm6WnNo")),
-                ]
-                bonus_number = _safe_int(result_item.get("bnsWnNo"))
-                round_no = _safe_int(result_item.get("ltEpsd"))
-                winning_text = f"Round {round_no}: {', '.join(map(str, winning_numbers))} + {bonus_number}"
-                
-                await publish_sensor("lotto645_winning_numbers", winning_text, {
-                    "numbers": winning_numbers,
-                    "bonus": bonus_number,
-                    "round": round_no,
-                    "friendly_name": "당첨 번호",
-                    "icon": "mdi:trophy-award",
-                })
-                
-                # Draw date
-                draw_date = _parse_yyyymmdd(result_item.get("ltRflYmd"))
-                if draw_date:
-                    await publish_sensor("lotto645_draw_date", draw_date, {
-                        "friendly_name": "추첨일",
-                        "icon": "mdi:calendar",
-                        "device_class": "date",
-                    })
-                
-                # ========== Prize Details from Internal API ==========
-                # Total sales
-                await publish_sensor("lotto645_total_sales", _safe_int(item.get("wholEpsdSumNtslAmt")), {
-                    "friendly_name": "총 판매액",
-                    "unit_of_measurement": "KRW",
-                    "icon": "mdi:cash-multiple",
-                })
-                
-                # 1st prize
-                await publish_sensor("lotto645_first_prize", _safe_int(item.get("rnk1WnAmt")), {
-                    "friendly_name": "1등 당첨금",
-                    "unit_of_measurement": "KRW",
-                    "total_amount": _safe_int(item.get("rnk1SumWnAmt")),
-                    "winners": _safe_int(item.get("rnk1WnNope")),
-                    "icon": "mdi:trophy",
-                })
-                
-                await publish_sensor("lotto645_first_winners", _safe_int(item.get("rnk1WnNope")), {
-                    "friendly_name": "1등 당첨자 수",
-                    "unit_of_measurement": "people",
-                    "icon": "mdi:account-multiple",
-                })
-                
-                # 2nd prize
-                await publish_sensor("lotto645_second_prize", _safe_int(item.get("rnk2WnAmt")), {
-                    "friendly_name": "2등 당첨금",
-                    "unit_of_measurement": "KRW",
-                    "total_amount": _safe_int(item.get("rnk2SumWnAmt")),
-                    "winners": _safe_int(item.get("rnk2WnNope")),
-                    "icon": "mdi:medal",
-                })
-                
-                await publish_sensor("lotto645_second_winners", _safe_int(item.get("rnk2WnNope")), {
-                    "friendly_name": "2등 당첨자 수",
-                    "unit_of_measurement": "people",
-                    "icon": "mdi:account-multiple-outline",
-                })
-                
-                # 3rd prize
-                await publish_sensor("lotto645_third_prize", _safe_int(item.get("rnk3WnAmt")), {
-                    "friendly_name": "3등 당첨금",
-                    "unit_of_measurement": "KRW",
-                    "total_amount": _safe_int(item.get("rnk3SumWnAmt")),
-                    "winners": _safe_int(item.get("rnk3WnNope")),
-                    "icon": "mdi:medal-outline",
-                })
-                
-                await publish_sensor("lotto645_third_winners", _safe_int(item.get("rnk3WnNope")), {
-                    "friendly_name": "3등 당첨자 수",
-                    "unit_of_measurement": "people",
-                    "icon": "mdi:account-group-outline",
-                })
-                
-                # 4th prize
-                await publish_sensor("lotto645_fourth_prize", _safe_int(item.get("rnk4WnAmt")), {
-                    "friendly_name": "4등 당첨금",
-                    "unit_of_measurement": "KRW",
-                    "total_amount": _safe_int(item.get("rnk4SumWnAmt")),
-                    "winners": _safe_int(item.get("rnk4WnNope")),
-                    "icon": "mdi:currency-krw",
-                })
-                
-                await publish_sensor("lotto645_fourth_winners", _safe_int(item.get("rnk4WnNope")), {
-                    "friendly_name": "4등 당첨자 수",
-                    "unit_of_measurement": "people",
-                    "icon": "mdi:account-group",
-                })
-                
-                # 5th prize
-                await publish_sensor("lotto645_fifth_prize", _safe_int(item.get("rnk5WnAmt")), {
-                    "friendly_name": "5등 당첨금",
-                    "unit_of_measurement": "KRW",
-                    "total_amount": _safe_int(item.get("rnk5SumWnAmt")),
-                    "winners": _safe_int(item.get("rnk5WnNope")),
-                    "icon": "mdi:cash",
-                })
-                
-                await publish_sensor("lotto645_fifth_winners", _safe_int(item.get("rnk5WnNope")), {
-                    "friendly_name": "5등 당첨자 수",
-                    "unit_of_measurement": "people",
-                    "icon": "mdi:account",
-                })
-                
-                # Total winners
-                await publish_sensor("lotto645_total_winners", _safe_int(item.get("sumWnNope")), {
-                    "friendly_name": "총 당첨자 수",
-                    "unit_of_measurement": "people",
-                    "icon": "mdi:account-group",
-                })
-                
-            except Exception as e:
-                logger.warning(f"Failed to fetch lotto results: {e}")
-            
-            
-            # Number frequency analysis
-            try:
-                frequency = await analyzer.async_analyze_number_frequency(50)
-                top_num = frequency[0] if frequency else None
-                if top_num:
-                    await publish_sensor("lotto45_top_frequency_number", top_num.number, {
-                        "count": top_num.count,
-                        "percentage": top_num.percentage,
-                        "unit_of_measurement": "times",
-                        "friendly_name": "최다 출현 번호",
-                        "icon": "mdi:star",
-                    })
-            except Exception as e:
-                logger.warning(f"Failed to analyze frequency: {e}")
-            
-            # Hot/Cold numbers
-            try:
-                hot_cold = await analyzer.async_get_hot_cold_numbers(20)
-                await publish_sensor("lotto45_hot_numbers", 
-                    ",".join(map(str, hot_cold.hot_numbers)), {
-                        "numbers": hot_cold.hot_numbers,
-                        "friendly_name": "핫 번호",
-                        "icon": "mdi:fire",
-                    })
-                await publish_sensor("lotto45_cold_numbers",
-                    ",".join(map(str, hot_cold.cold_numbers)), {
-                        "numbers": hot_cold.cold_numbers,
-                        "friendly_name": "콜드 번호",
-                        "icon": "mdi:snowflake",
-                    })
-            except Exception as e:
-                logger.warning(f"Failed to get hot/cold numbers: {e}")
-            
-            # Purchase statistics
-            try:
-                stats = await analyzer.async_get_purchase_statistics(365)
-                await publish_sensor("lotto45_total_winning", stats.total_winning_amount, {
-                    "total_purchase": stats.total_purchase_amount,
-                    "total_purchase_count": stats.total_purchase_count,
-                    "total_winning_count": stats.total_winning_count,
-                    "win_rate": stats.win_rate,
-                    "roi": stats.roi,
-                    "rank_distribution": stats.rank_distribution,
-                    "unit_of_measurement": "KRW",
-                    "friendly_name": "총 당첨금액",
-                    "icon": "mdi:trophy",
-                })
-            except Exception as e:
-                logger.warning(f"Failed to get purchase stats: {e}")
-            
-            # Purchase history (last week)
-            try:
-                history = await lotto_645.async_get_buy_history_this_week()
-                
-                if history:
-                    # Get the most recent purchase
-                    latest_purchase = history[0]
-                    
-                    # Format games for display
-                    games_info = []
-                    for game in latest_purchase.games:
-                        games_info.append({
-                            "slot": game.slot,
-                            "mode": str(game.mode),
-                            "numbers": game.numbers
-                        })
-                    
-                    # Publish latest purchase sensor
-                    await publish_sensor("lotto45_latest_purchase", latest_purchase.round_no, {
-                        "round_no": latest_purchase.round_no,
-                        "barcode": latest_purchase.barcode,
-                        "result": latest_purchase.result,
-                        "games": games_info,
-                        "games_count": len(latest_purchase.games),
-                        "friendly_name": "최근 구매",
-                        "icon": "mdi:receipt-text",
-                    })
-                    
-                    # Publish individual game sensors from all purchases (up to 5 total games)
-                    # Reverse history to show oldest games first (Game 1 = oldest)
-                    all_games = []
-                    for purchase in reversed(history):
-                        for game in purchase.games:
-                            all_games.append({
-                                'game': game,
-                                'round_no': purchase.round_no,
-                                'result': purchase.result
-                            })
-                            if len(all_games) >= 5:
-                                break
-                        if len(all_games) >= 5:
-                            break
-                    
-                    logger.info(f"Publishing {len(all_games)} individual game sensors from {len(history)} purchase(s)...")
-                    
-                    # Get latest round info for comparison
-                    latest_round_no = await lotto_645.async_get_latest_round_no()
-                    
-                    # Counter for weekly purchases (Pending games)
-                    weekly_purchase_count = 0
-                    
-                    for i, game_info in enumerate(all_games, 1):
-                        game = game_info['game']
-                        round_no = game_info['round_no']
-                        numbers_str = ", ".join(map(str, game.numbers))
-                        
-                        # Publish game numbers sensor
-                        await publish_sensor(f"lotto45_game_{i}", numbers_str, {
-                            "slot": game.slot,
-                            "mode": str(game.mode),
-                            "numbers": game.numbers,
-                            "round_no": round_no,
-                            "result": game_info['result'],
-                            "friendly_name": f"게임 {i}",
-                            "icon": f"mdi:numeric-{i}-box-multiple",
-                        })
-                        logger.info(f"Game {i} ({game.slot}): {numbers_str} - {game.mode} (Round {round_no})")
-                        
-                        # Check winning result for each game
-                        try:
-                            result_text = "Pending"
-                            result_icon = "mdi:clock-outline"
-                            result_color = "grey"
-                            matching_count = 0
-                            bonus_match = False
-                            winning_numbers = []
-                            bonus_number = 0
-                            rank = 0
-                            
-                            # Only check if the round has been drawn
-                            if round_no <= latest_round_no:
-                                # Get winning numbers for this round
-                                winning_data = await lotto_645.async_get_round_info(round_no)
-                                winning_numbers = winning_data.numbers
-                                bonus_number = winning_data.bonus_num
-                                
-                                # Check winning
-                                check_result = await analyzer.async_check_winning(game.numbers, round_no)
-                                matching_count = check_result['matching_count']
-                                bonus_match = check_result['bonus_match']
-                                rank = check_result['rank']
-                                
-                                # Determine result text and icon
-                                if rank == 1:
-                                    result_text = "1st Prize"
-                                    result_icon = "mdi:trophy"
-                                    result_color = "gold"
-                                elif rank == 2:
-                                    result_text = "2nd Prize"
-                                    result_icon = "mdi:medal"
-                                    result_color = "silver"
-                                elif rank == 3:
-                                    result_text = "3rd Prize"
-                                    result_icon = "mdi:medal-outline"
-                                    result_color = "bronze"
-                                elif rank == 4:
-                                    result_text = "4th Prize"
-                                    result_icon = "mdi:currency-krw"
-                                    result_color = "blue"
-                                elif rank == 5:
-                                    result_text = "5th Prize"
-                                    result_icon = "mdi:cash"
-                                    result_color = "green"
-                                else:
-                                    result_text = "No Win"
-                                    result_icon = "mdi:close-circle-outline"
-                                    result_color = "red"
-                            else:
-                                # Game not drawn yet - count as weekly purchase
-                                weekly_purchase_count += 1
-                            
-                            # Publish winning result sensor
-                            await publish_sensor(f"lotto45_game_{i}_result", result_text, {
-                                "round_no": round_no,
-                                "my_numbers": game.numbers,
-                                "winning_numbers": winning_numbers,
-                                "bonus_number": bonus_number,
-                                "matching_count": matching_count,
-                                "bonus_match": bonus_match,
-                                "rank": rank,
-                                "result": result_text,
-                                "color": result_color,
-                                "friendly_name": f"게임 {i} 결과",
-                                "icon": result_icon,
-                            })
-                            logger.info(f"Game {i} result: {result_text} (Match: {matching_count}, Rank: {rank})")
-                            
-                        except Exception as e:
-                            logger.warning(f"Failed to check winning for game {i}: {e}")
-                            # Publish default sensor on error
-                            await publish_sensor(f"lotto45_game_{i}_result", "Check Failed", {
-                                "round_no": round_no,
-                                "my_numbers": game.numbers,
-                                "error": str(e),
-                                "friendly_name": f"게임 {i} 결과",
-                                "icon": "mdi:alert-circle-outline",
-                            })
-                    
-                    # Publish weekly purchase count sensor (based on Pending games)
-                    weekly_limit = 5
-                    remaining_count = max(0, weekly_limit - weekly_purchase_count)
-                    
-                    await publish_sensor("lotto45_weekly_purchase_count", weekly_purchase_count, {
-                        "weekly_limit": weekly_limit,
-                        "remaining": remaining_count,
-                        "friendly_name": "주간 구매 횟수",
-                        "unit_of_measurement": "games",
-                        "icon": "mdi:ticket-confirmation" if remaining_count > 0 else "mdi:close-circle",
-                    })
-                    
-                    logger.info(f"Weekly purchases: {weekly_purchase_count}/{weekly_limit} (remaining: {remaining_count})")
-                    
-            except Exception as e:
-                logger.warning(f"Failed to get purchase history: {e}")
-        
-        # Update time (with timezone)
-        from datetime import timezone
+        # Update time
         now = datetime.now(timezone.utc).isoformat()
-        await publish_sensor("lotto45_last_update", now, {
+        await publish_sensor_for_account(account, "lotto45_last_update", now, {
             "friendly_name": "마지막 업데이트",
             "icon": "mdi:clock-check-outline",
-            # Note: removed device_class="timestamp" to avoid timezone validation issues
         })
         
-        logger.info("Sensors updated successfully")
+        logger.info(f"[SENSOR][{username}] Sensors updated successfully")
         
     except Exception as e:
-        logger.error(f"Failed to update sensors: {e}", exc_info=True)
+        logger.error(f"[SENSOR][{username}] Update failed: {e}", exc_info=True)
 
-async def publish_sensor(entity_id: str, state, attributes: dict = None):
-    """
-    Publish sensor state
-    Uses MQTT Discovery if use_mqtt=true, otherwise uses REST API
+
+async def publish_sensor_for_account(
+    account: AccountData,
+    entity_id: str,
+    state,
+    attributes: dict = None
+):
+    """Publish sensor for a specific account"""
+    username = account.username
     
-    Args:
-        entity_id: Sensor ID (e.g., 'lotto45_balance')
-        state: Sensor state value
-        attributes: Sensor attributes dictionary
-    """
-    # Only log purchase-related sensors
-    is_important = "purchase" in entity_id or "latest" in entity_id
-    
-    if is_important:
-        logger.info(f"[SENSOR] Publishing {entity_id}: {state}")
-    
-    # Try MQTT first if enabled
+    # MQTT first
     if config["use_mqtt"] and mqtt_client and mqtt_client.connected:
         try:
             success = await publish_sensor_mqtt(
                 mqtt_client=mqtt_client,
                 entity_id=entity_id,
                 state=state,
-                username=config["username"],
+                username=username,
                 attributes=attributes
             )
             if success:
-                if is_important:
-                    logger.info(f"[SENSOR] Published via MQTT: {entity_id}")
                 return
-            else:
-                logger.warning(f"[SENSOR] MQTT publish failed for {entity_id}, falling back to REST API")
         except Exception as e:
-            logger.error(f"[SENSOR] Error publishing via MQTT: {e}")
+            logger.error(f"[SENSOR][{username}] MQTT publish error: {e}")
     
     # Fallback to REST API
     import aiohttp
@@ -1301,9 +662,7 @@ async def publish_sensor(entity_id: str, state, attributes: dict = None):
     if not config["supervisor_token"]:
         return
     
-    # Add addon_ prefix to prevent conflicts with integration
-    addon_entity_id = f"addon_{config['username']}_{entity_id}"
-
+    addon_entity_id = f"addon_{username}_{entity_id}"
     url = f"{config['ha_url']}/api/states/sensor.{addon_entity_id}"
     headers = {
         "Authorization": f"Bearer {config['supervisor_token']}",
@@ -1318,61 +677,52 @@ async def publish_sensor(entity_id: str, state, attributes: dict = None):
         async with aiohttp.ClientSession() as session:
             async with session.post(url, json=data, headers=headers, ssl=False) as resp:
                 if resp.status not in [200, 201]:
-                    logger.error(f"[SENSOR] Failed to publish {addon_entity_id}: {resp.status} - {await resp.text()}")
-                elif is_important:
-                    logger.info(f"[SENSOR] Published via REST API: {addon_entity_id}")
+                    logger.error(f"[SENSOR][{username}] REST API failed: {resp.status}")
     except Exception as e:
-        logger.error(f"[SENSOR] Error publishing {addon_entity_id}: {e}")
+        logger.error(f"[SENSOR][{username}] REST API error: {e}")
 
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
     """Main page"""
-    status_icon = "âœ“" if client and client.logged_in else "âœ—"
-    status_text = "Connected" if client and client.logged_in else "Disconnected"
+    accounts_html = "<ul>"
+    for username, account in accounts.items():
+        status = "✅ Connected" if account.client and account.client.logged_in else "❌ Disconnected"
+        enabled = "✅" if account.enabled else "❌"
+        accounts_html += f"<li><strong>{username}</strong>: {status} (Enabled: {enabled})</li>"
+    accounts_html += "</ul>"
     
     return f"""
     <!DOCTYPE html>
     <html>
         <head>
             <meta charset="UTF-8">
-            <title>Lotto 45 v0.6.8</title>
+            <title>Lotto 45 v2.0.0 Multi-Account</title>
             <style>
                 body {{ font-family: Arial, sans-serif; margin: 40px; }}
                 h1 {{ color: #333; }}
-                .status {{ font-size: 18px; margin: 20px 0; }}
-                .info {{ background: #f5f5f5; padding: 15px; border-radius: 5px; }}
-                .version {{ color: #666; font-size: 14px; }}
-                a {{ color: #0066cc; text-decoration: none; }}
-                a:hover {{ text-decoration: underline; }}
+                .info {{ background: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0; }}
             </style>
         </head>
         <body>
-            <h1>ðŸŽ° DH Lottery Lotto 45 <span class="version">v0.6.8</span></h1>
-            <div class="status">
-                Status: {status_icon} {status_text}
-            </div>
+            <h1>🎰 DH Lottery Lotto 45 <span style="color:#666;">v2.0.0 Multi-Account</span></h1>
+            
             <div class="info">
-                <p><strong>Username:</strong> {config['username']}</p>
+                <h2>Accounts ({len(accounts)})</h2>
+                {accounts_html}
+            </div>
+            
+            <div class="info">
                 <p><strong>Update Interval:</strong> {config['update_interval']}s</p>
                 <p><strong>Lotto 645 Enabled:</strong> {config['enable_lotto645']}</p>
-                <p><strong>Version:</strong> 2.0.0 (Improved Login & Sensors)</p>
+                <p><strong>MQTT Enabled:</strong> {config['use_mqtt']}</p>
             </div>
-            <h2>Features v0.6.8</h2>
+            
+            <h2>API</h2>
             <ul>
-                <li>âœ“ Improved login (RSA encryption + session management)</li>
-                <li>âœ“ User-Agent rotation (anti-bot detection)</li>
-                <li>âœ“ Circuit Breaker (continuous failure prevention)</li>
-                <li>âœ“ HA Sensor integration</li>
+                <li><a href="/health">Health Check</a></li>
+                <li><a href="/accounts">View All Accounts</a></li>
             </ul>
-            <h2>Links</h2>
-            <ul>
-                <li><a href="api-docs">ðŸ“š API Documentation</a> (Ingress-friendly)</li>
-                <li><a href="health">â¤ï¸ Health Check</a></li>
-                <li><a href="stats">ðŸ“Š Statistics</a></li>
-            </ul>
-            <p><strong>ðŸ’¡ Advanced:</strong> For interactive Swagger UI, access directly via port 60099:<br>
-            <code>http://homeassistant.local:60099/docs</code></p>
         </body>
     </html>
     """
@@ -1381,258 +731,34 @@ async def root():
 @app.get("/health")
 async def health():
     """Health check"""
+    accounts_status = {}
+    for username, account in accounts.items():
+        accounts_status[username] = {
+            "logged_in": account.client.logged_in if account.client else False,
+            "enabled": account.enabled,
+        }
+    
     return {
-        "status": "ok" if client and client.logged_in else "error",
-        "logged_in": client.logged_in if client else False,
-        "username": config["username"],
+        "status": "ok",
+        "version": "2.0.0",
+        "accounts": accounts_status,
+        "total_accounts": len(accounts),
         "lotto645_enabled": config["enable_lotto645"],
         "mqtt_enabled": config["use_mqtt"],
-        "version": "2.1.0 (0.6.8)",
     }
 
 
-@app.post("/random")
-async def generate_random(count: int = 6, games: int = 1):
-    """Generate random numbers"""
-    if not analyzer:
-        raise HTTPException(status_code=400, detail="Lotto 645 not enabled")
-    
-    if count < 1 or count > 45:
-        raise HTTPException(status_code=400, detail="Count must be between 1 and 45")
-    
-    if games < 1 or games > 5:
-        raise HTTPException(status_code=400, detail="Games must be between 1 and 5")
-    
-    results = []
-    for _ in range(games):
-        numbers = analyzer.generate_random_numbers(count)
-        results.append(numbers)
-    
-    return {"numbers": results}
-
-
-@app.post("/check")
-async def check_winning(numbers: list[int], round_no: Optional[int] = None):
-    """Check winning"""
-    if not analyzer:
-        raise HTTPException(status_code=400, detail="Lotto 645 not enabled")
-    
-    if len(numbers) != 6:
-        raise HTTPException(status_code=400, detail="Must provide exactly 6 numbers")
-    
-    if any(n < 1 or n > 45 for n in numbers):
-        raise HTTPException(status_code=400, detail="Numbers must be between 1 and 45")
-    
-    try:
-        result = await analyzer.async_check_winning(numbers, round_no)
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/stats")
-async def get_stats():
-    """Get statistics"""
-    if not analyzer:
-        raise HTTPException(status_code=400, detail="Lotto 645 not enabled")
-    
-    try:
-        frequency = await analyzer.async_analyze_number_frequency(50)
-        hot_cold = await analyzer.async_get_hot_cold_numbers(20)
-        purchase_stats = await analyzer.async_get_purchase_statistics(365)
-        
-        return {
-            "frequency": [
-                {"number": f.number, "count": f.count, "percentage": f.percentage} 
-                for f in frequency[:10]
-            ],
-            "hot_numbers": hot_cold.hot_numbers,
-            "cold_numbers": hot_cold.cold_numbers,
-            "most_frequent": [
-                {"number": f.number, "count": f.count, "percentage": f.percentage}
-                for f in hot_cold.most_frequent
-            ],
-            "purchase_stats": {
-                "total_purchase_count": purchase_stats.total_purchase_count,
-                "total_purchase_amount": purchase_stats.total_purchase_amount,
-                "total_winning_count": purchase_stats.total_winning_count,
-                "total_winning_amount": purchase_stats.total_winning_amount,
-                "win_rate": purchase_stats.win_rate,
-                "roi": purchase_stats.roi,
-                "rank_distribution": purchase_stats.rank_distribution,
-            },
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/balance")
-async def get_balance():
-    """Get balance"""
-    if not client:
-        raise HTTPException(status_code=400, detail="Client not initialized")
-    
-    try:
-        balance = await client.async_get_balance()
-        return {
-            "deposit": balance.deposit,
-            "purchase_available": balance.purchase_available,
-            "reservation_purchase": balance.reservation_purchase,
-            "withdrawal_request": balance.withdrawal_request,
-            "purchase_impossible": balance.purchase_impossible,
-            "this_month_accumulated_purchase": balance.this_month_accumulated_purchase,
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/buy")
-async def buy_lotto(games: list[dict]):
-    """Buy Lotto 6/45
-    
-    Args:
-        games: Game list
-            - mode: "Auto", "Manual", "Semi-Auto"
-            - numbers: Number list (required for Manual/Semi-Auto)
-    
-    Example:
-        [
-            {"mode": "Auto"},
-            {"mode": "Manual", "numbers": [1, 7, 12, 23, 34, 41]},
-            {"mode": "Semi-Auto", "numbers": [3, 9, 15]}
-        ]
-    """
-    if not lotto_645:
-        raise HTTPException(status_code=400, detail="Lotto 645 not enabled")
-    
-    if not games or len(games) == 0:
-        raise HTTPException(status_code=400, detail="At least 1 game required")
-    
-    if len(games) > 5:
-        raise HTTPException(status_code=400, detail="Maximum 5 games allowed")
-    
-    try:
-        # Create game slots
-        from dh_lotto_645 import DhLotto645, DhLotto645SelMode
-        
-        # Mode mapping (English only)
-        mode_map = {
-            "Auto": DhLotto645SelMode.AUTO,
-            "Manual": DhLotto645SelMode.MANUAL,
-            "Semi-Auto": DhLotto645SelMode.SEMI_AUTO,
-        }
-        
-        slots = []
-        for i, game in enumerate(games):
-            mode_str = game.get("mode", "Auto")
-            numbers = game.get("numbers", [])
-            
-            # Mode validation
-            if mode_str not in mode_map:
-                raise HTTPException(
-                    status_code=400, 
-                    detail=f"Game {i+1}: Invalid mode '{mode_str}'. Must be 'Auto', 'Manual', or 'Semi-Auto'"
-                )
-            
-            mode = mode_map[mode_str]
-            
-            # Number validation (Manual/Semi-Auto)
-            if mode in [DhLotto645SelMode.MANUAL, DhLotto645SelMode.SEMI_AUTO]:
-                if not numbers:
-                    raise HTTPException(
-                        status_code=400,
-                        detail=f"Game {i+1}: Numbers required for mode '{mode_str}'"
-                    )
-                if len(numbers) > 6:
-                    raise HTTPException(
-                        status_code=400,
-                        detail=f"Game {i+1}: Maximum 6 numbers allowed"
-                    )
-                if any(n < 1 or n > 45 for n in numbers):
-                    raise HTTPException(
-                        status_code=400,
-                        detail=f"Game {i+1}: Numbers must be between 1 and 45"
-                    )
-            
-            # Add slot
-            slots.append(DhLotto645.Slot(mode=mode, numbers=numbers))
-        
-        # Purchase
-        logger.info(f"Purchasing {len(slots)} games...")
-        result = await lotto_645.async_buy(slots)
-        
-        # Return result
-        response = {
-            "success": True,
-            "round_no": result.round_no,
-            "barcode": result.barcode,
-            "issue_dt": result.issue_dt,
-            "games": [
-                {
-                    "slot": game.slot,
-                    "mode": str(game.mode),
-                    "numbers": game.numbers,
-                }
-                for game in result.games
-            ]
-        }
-        
-        logger.info(f"Purchase successful: Round {result.round_no}, Barcode {result.barcode}")
-        return response
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Purchase failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/buy/auto")
-async def buy_lotto_auto(count: int = 1):
-    """Buy Lotto 6/45 Auto
-    
-    Args:
-        count: Number of games to purchase (1-5)
-    """
-    if count < 1 or count > 5:
-        raise HTTPException(status_code=400, detail="Count must be between 1 and 5")
-    
-    games = [{"mode": "Auto"} for _ in range(count)]
-    return await buy_lotto(games)
-
-
-@app.get("/buy/history")
-async def get_buy_history():
-    """Get purchase history from last week"""
-    if not lotto_645:
-        raise HTTPException(status_code=400, detail="Lotto 645 not enabled")
-    
-    try:
-        history = await lotto_645.async_get_buy_history_this_week()
-        
-        results = []
-        for item in history:
-            results.append({
-                "round_no": item.round_no,
-                "barcode": item.barcode,
-                "result": item.result,
-                "games": [
-                    {
-                        "slot": game.slot,
-                        "mode": str(game.mode),
-                        "numbers": game.numbers,
-                    }
-                    for game in item.games
-                ]
-            })
-        
-        return {
-            "count": len(results),
-            "items": results,
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
+@app.get("/accounts")
+async def list_accounts():
+    """List all accounts"""
+    result = []
+    for username, account in accounts.items():
+        result.append({
+            "username": username,
+            "enabled": account.enabled,
+            "logged_in": account.client.logged_in if account.client else False,
+        })
+    return {"accounts": result}
 
 
 if __name__ == "__main__":
