@@ -1052,8 +1052,8 @@ async def root(request: Request):
                 {accounts_html}
             </div>
             <ul>
-                <li><a href="/health">Health Check</a></li>
-                <li><a href="/accounts">Accounts</a></li>
+                <li><a href="health">Health Check</a></li>
+                <li><a href="accounts">Accounts</a></li>
             </ul>
         </body>
     </html>
