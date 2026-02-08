@@ -103,28 +103,22 @@ def _get_lotto645_item(data: dict) -> dict:
 
 
 def _translate_result(result: str) -> str:
-    """Translate Korean lottery result to English"""
+    """Translate lottery result to English"""
     if not result:
         return "Unknown"
     
-    result_lower = result.lower()
-    
-    # Korean to English mapping
-    translations = {
-        "ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â«ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¶ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â²ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¨": "Pending",
-        "ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â«ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â²ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¨": "No Win",
-        "1ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â«ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â±": "1st Prize",
-        "2ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â«ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â±": "2nd Prize",
-        "3ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â«ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â±": "3rd Prize",
-        "4ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â«ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â±": "4th Prize",
-        "5ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â«ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â±": "5th Prize",
+    # Direct mapping based on common patterns
+    result_map = {
+        "": "Pending",
+        "T": "No Win",
+        "1": "1st Prize",
+        "2": "2nd Prize",
+        "3": "3rd Prize",
+        "4": "4th Prize",
+        "5": "5th Prize",
     }
     
-    for korean, english in translations.items():
-        if korean in result:
-            return english
-    
-    return result
+    return result_map.get(result, result)
 
 
 async def register_buttons():
@@ -151,7 +145,7 @@ async def register_buttons():
     
     success1 = mqtt_client.publish_button_discovery(
         button_id="buy_auto_1",
-        name="1 게임 자동 구매",  
+        name="Buy 1 Auto Game",
         command_topic=button1_topic,
         username=username,
         device_name=main_device_name,
@@ -169,7 +163,7 @@ async def register_buttons():
     
     success2 = mqtt_client.publish_button_discovery(
         button_id="buy_auto_5",
-        name="5 게임 자동 구매",  # Korean
+        name="Buy 5 Auto Games",
         command_topic=button2_topic,
         username=username,
         device_name=main_device_name,
@@ -187,7 +181,7 @@ async def register_buttons():
     
     success3 = mqtt_client.publish_button_discovery(
         button_id="buy_manual",
-        name="1 게임 수동 구매",  # Korean
+        name="Buy 1 Manual Game",
         command_topic=button3_topic,
         username=username,
         device_name=main_device_name,
@@ -205,7 +199,7 @@ async def register_buttons():
     
     success4 = mqtt_client.publish_input_text_discovery(
         input_id="manual_numbers",
-        name="Manual Numbers Input",  # English
+        name="Manual Numbers Input",
         state_topic=input_state_topic,
         command_topic=input_command_topic,
         username=username,
@@ -217,7 +211,7 @@ async def register_buttons():
     if success4:
         logger.info("[INPUT] Input text registered: manual_numbers")
         # Publish initial state
-        mqtt_client.client.publish(input_state_topic, "자동,자동,자동,자동,자동,자동", qos=1, retain=True)
+        mqtt_client.client.publish(input_state_topic, "auto,auto,auto,auto,auto,auto", qos=1, retain=True)
     else:
         logger.error("[INPUT] Failed to register input text: manual_numbers")
     
@@ -259,7 +253,6 @@ def on_button_command(client_mqtt, userdata, message):
             logger.info(f"[BUTTON] Entity ID: {entity_id}")
             
             # Extract button_id (buy_auto_1, buy_auto_5, buy_manual)
-            # entity_id format: dhlotto_아이디_buy_auto_1
             parts_entity = entity_id.split("_")
             logger.info(f"[BUTTON] Entity parts: {parts_entity}")
             
@@ -291,11 +284,8 @@ def on_button_command(client_mqtt, userdata, message):
         logger.error(f"[MQTT] Error handling message: {e}", exc_info=True)
 
 
-    return result
-
-
 # Global variable to store manual numbers state
-manual_numbers_state = "자동,자동,자동,자동,자동,자동"
+manual_numbers_state = "auto,auto,auto,auto,auto,auto"
 
 
 async def get_manual_numbers_from_mqtt() -> Optional[str]:
@@ -309,7 +299,7 @@ async def publish_purchase_error(error_message: str):
     error_data = {
         "error": error_message,
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "friendly_name": "구매 오류",
+        "friendly_name": "Purchase Error",
         "icon": "mdi:alert-circle",
     }
     
@@ -338,7 +328,7 @@ async def execute_button_purchase(button_id: str):
             # Get manual numbers from MQTT state topic
             manual_numbers_text = await get_manual_numbers_from_mqtt()
             if not manual_numbers_text:
-                error_msg = "수동 번호를 입력해주세요"
+                error_msg = "Please enter manual numbers"
                 logger.error(f"[PURCHASE] {error_msg}")
                 await publish_purchase_error(error_msg)
                 return
@@ -351,7 +341,7 @@ async def execute_button_purchase(button_id: str):
                 parts = [p.strip() for p in manual_numbers_text.split(",")]
                 
                 if len(parts) != 6:
-                    error_msg = f"6개의 값을 입력해야 합니다 (현재: {len(parts)}개)"
+                    error_msg = f"Must provide exactly 6 values (current: {len(parts)})"
                     logger.error(f"[PURCHASE] {error_msg}")
                     await publish_purchase_error(error_msg)
                     return
@@ -361,7 +351,7 @@ async def execute_button_purchase(button_id: str):
                 auto_positions = []
                 
                 for i, part in enumerate(parts):
-                    if part == "자동":
+                    if part.lower() == "auto":
                         auto_positions.append(i)
                         validated_numbers.append(None)  # Will be filled later
                     else:
@@ -371,13 +361,13 @@ async def execute_button_purchase(button_id: str):
                             
                             # Validate range
                             if num <= 0:
-                                error_msg = f"번호는 1 이상이어야 합니다 (입력값: {num})"
+                                error_msg = f"Number must be greater than 0 (input: {num})"
                                 logger.error(f"[PURCHASE] {error_msg}")
                                 await publish_purchase_error(error_msg)
                                 return
                             
                             if num >= 46:
-                                error_msg = f"번호는 45 이하여야 합니다 (입력값: {num})"
+                                error_msg = f"Number must be 45 or less (input: {num})"
                                 logger.error(f"[PURCHASE] {error_msg}")
                                 await publish_purchase_error(error_msg)
                                 return
@@ -387,12 +377,12 @@ async def execute_button_purchase(button_id: str):
                             # Check if it's a float
                             try:
                                 float(part)
-                                error_msg = f"정수만 입력 가능합니다 (입력값: {part})"
+                                error_msg = f"Only integers allowed (input: {part})"
                                 logger.error(f"[PURCHASE] {error_msg}")
                                 await publish_purchase_error(error_msg)
                                 return
                             except ValueError:
-                                error_msg = f"잘못된 입력입니다. 1-45 숫자 또는 '자동'만 입력 가능합니다 (입력값: {part})"
+                                error_msg = f"Invalid input. Only 1-45 numbers or 'auto' allowed (input: {part})"
                                 logger.error(f"[PURCHASE] {error_msg}")
                                 await publish_purchase_error(error_msg)
                                 return
@@ -407,7 +397,7 @@ async def execute_button_purchase(button_id: str):
                     
                     # Check if we have enough available numbers
                     if len(available_numbers) < len(auto_positions):
-                        error_msg = "중복된 번호가 너무 많아 자동 번호를 생성할 수 없습니다"
+                        error_msg = "Too many duplicate numbers, cannot generate auto numbers"
                         logger.error(f"[PURCHASE] {error_msg}")
                         await publish_purchase_error(error_msg)
                         return
@@ -421,7 +411,7 @@ async def execute_button_purchase(button_id: str):
                 
                 # Check for duplicates
                 if len(set(validated_numbers)) != 6:
-                    error_msg = "중복된 번호가 있습니다"
+                    error_msg = "Duplicate numbers found"
                     logger.error(f"[PURCHASE] {error_msg}")
                     await publish_purchase_error(error_msg)
                     return
@@ -434,7 +424,7 @@ async def execute_button_purchase(button_id: str):
                 slots = [DhLotto645.Slot(mode=DhLotto645SelMode.MANUAL, numbers=final_numbers)]
                 
             except Exception as e:
-                error_msg = f"입력값 처리 중 오류 발생: {str(e)}"
+                error_msg = f"Error processing input: {str(e)}"
                 logger.error(f"[PURCHASE] {error_msg}", exc_info=True)
                 await publish_purchase_error(error_msg)
                 return
@@ -485,7 +475,7 @@ async def execute_button_purchase(button_id: str):
             "error": str(e),
             "button_id": button_id,
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "friendly_name": "구매 오류",
+            "friendly_name": "Purchase Error",
             "icon": "mdi:alert-circle",
         }
         
@@ -639,10 +629,10 @@ async def custom_docs():
             </style>
         </head>
         <body>
-            <h1> API Documentation</h1>
+            <h1>📊 API Documentation</h1>
             
             <div class="note">
-                <strong> Tip:</strong> For full interactive Swagger UI, access directly via port:<br>
+                <strong>💡 Tip:</strong> For full interactive Swagger UI, access directly via port:<br>
                 <code>http://homeassistant.local:60199/docs</code>
             </div>
             
@@ -745,16 +735,16 @@ Response:
 ]
 
 Modes:
-- "Auto" (): System picks all 6 numbers
-- "Manual" (): You pick all 6 numbers
-- "Semi-Auto" (): You pick some, system fills the rest
+- "Auto" (자동): System picks all 6 numbers
+- "Manual" (수동): You pick all 6 numbers
+- "Semi-Auto" (반자동): You pick some, system fills the rest
 
 Response:
 {
   "success": true,
   "round_no": 1122,
   "barcode": "59865 36399 04155 63917 56431 42167",
-  "issue_dt": "2024/05/28  17:55:27",
+  "issue_dt": "2024/05/28 화 17:55:27",
   "games": [...]
 }</pre>
             </div>
@@ -779,7 +769,7 @@ Response:
     {
       "round_no": 1122,
       "barcode": "...",
-      "result": "",
+      "result": "미추첨",
       "games": [...]
     }
   ]
@@ -808,7 +798,7 @@ curl -X POST "http://homeassistant.local:60199/buy/auto?count=3"</pre>
                 <li>Or use your Home Assistant IP: <code>http://YOUR_HA_IP:60199/docs</code></li>
             </ol>
             
-            <p><a href="."> Back to Home</a></p>
+            <p><a href="/">🏠 Back to Home</a></p>
         </body>
     </html>
     """
@@ -854,7 +844,7 @@ async def update_sensors():
             "withdrawal_request": balance.withdrawal_request,
             "this_month_accumulated": balance.this_month_accumulated_purchase,
             "unit_of_measurement": "KRW",
-            "friendly_name": "ë™í–‰ë³µê¶Œ ì˜ˆì¹˜ê¸ˆ",
+            "friendly_name": "Lotto Balance",
             "icon": "mdi:wallet",
         })
         
@@ -895,20 +885,20 @@ async def update_sensors():
                 
                 # Round number
                 await publish_sensor("lotto645_round", _safe_int(result_item.get("ltEpsd")), {
-                    "friendly_name": "ë¡œë˜ 645 íšŒì°¨",
+                    "friendly_name": "Lotto 645 Round",
                     "icon": "mdi:counter",
                 })
                 
                 # Numbers 1-6
                 for i in range(1, 7):
                     await publish_sensor(f"lotto645_number{i}", _safe_int(result_item.get(f"tm{i}WnNo")), {
-                        "friendly_name": f"ë¡œë˜ 645 ë²ˆí˜¸ {i}",
+                        "friendly_name": f"Lotto 645 Number {i}",
                         "icon": f"mdi:numeric-{i}-circle",
                     })
                 
                 # Bonus number
                 await publish_sensor("lotto645_bonus", _safe_int(result_item.get("bnsWnNo")), {
-                    "friendly_name": "ë¡œë˜ 645 ë³´ë„ˆìŠ¤",
+                    "friendly_name": "Lotto 645 Bonus",
                     "icon": "mdi:star-circle",
                 })
                 
@@ -923,13 +913,13 @@ async def update_sensors():
                 ]
                 bonus_number = _safe_int(result_item.get("bnsWnNo"))
                 round_no = _safe_int(result_item.get("ltEpsd"))
-                winning_text = f"{round_no}íšŒ, {', '.join(map(str, winning_numbers))} + {bonus_number}"
+                winning_text = f"Round {round_no}: {', '.join(map(str, winning_numbers))} + {bonus_number}"
                 
                 await publish_sensor("lotto645_winning_numbers", winning_text, {
                     "numbers": winning_numbers,
                     "bonus": bonus_number,
                     "round": round_no,
-                    "friendly_name": "ë¡œë˜ 645 ë‹¹ì²¨ë²ˆí˜¸",
+                    "friendly_name": "Lotto 645 Winning Numbers",
                     "icon": "mdi:trophy-award",
                 })
                 
@@ -937,7 +927,7 @@ async def update_sensors():
                 draw_date = _parse_yyyymmdd(result_item.get("ltRflYmd"))
                 if draw_date:
                     await publish_sensor("lotto645_draw_date", draw_date, {
-                        "friendly_name": "ë¡œë˜ 645 ì¶”ì²¨ì¼",
+                        "friendly_name": "Lotto 645 Draw Date",
                         "icon": "mdi:calendar",
                         "device_class": "date",
                     })
@@ -945,14 +935,14 @@ async def update_sensors():
                 # ========== Prize Details from Internal API ==========
                 # Total sales
                 await publish_sensor("lotto645_total_sales", _safe_int(item.get("wholEpsdSumNtslAmt")), {
-                    "friendly_name": "ë¡œë˜ 645 ì´ íŒë§¤ì•¡",
+                    "friendly_name": "Lotto 645 Total Sales",
                     "unit_of_measurement": "KRW",
                     "icon": "mdi:cash-multiple",
                 })
                 
                 # 1st prize
                 await publish_sensor("lotto645_first_prize", _safe_int(item.get("rnk1WnAmt")), {
-                    "friendly_name": "ë¡œë˜ 645 1ë“± ìƒê¸ˆ",
+                    "friendly_name": "Lotto 645 1st Prize",
                     "unit_of_measurement": "KRW",
                     "total_amount": _safe_int(item.get("rnk1SumWnAmt")),
                     "winners": _safe_int(item.get("rnk1WnNope")),
@@ -960,14 +950,14 @@ async def update_sensors():
                 })
                 
                 await publish_sensor("lotto645_first_winners", _safe_int(item.get("rnk1WnNope")), {
-                    "friendly_name": "ë¡œë˜ 645 1ë“± ë‹¹ì²¨ìž",
-                    "unit_of_measurement": "ëª…",
+                    "friendly_name": "Lotto 645 1st Winners",
+                    "unit_of_measurement": "people",
                     "icon": "mdi:account-multiple",
                 })
                 
                 # 2nd prize
                 await publish_sensor("lotto645_second_prize", _safe_int(item.get("rnk2WnAmt")), {
-                    "friendly_name": "ë¡œë˜ 645 2ë“± ìƒê¸ˆ",
+                    "friendly_name": "Lotto 645 2nd Prize",
                     "unit_of_measurement": "KRW",
                     "total_amount": _safe_int(item.get("rnk2SumWnAmt")),
                     "winners": _safe_int(item.get("rnk2WnNope")),
@@ -975,14 +965,14 @@ async def update_sensors():
                 })
                 
                 await publish_sensor("lotto645_second_winners", _safe_int(item.get("rnk2WnNope")), {
-                    "friendly_name": "ë¡œë˜ 645 2ë“± ë‹¹ì²¨ìž",
-                    "unit_of_measurement": "ëª…",
+                    "friendly_name": "Lotto 645 2nd Winners",
+                    "unit_of_measurement": "people",
                     "icon": "mdi:account-multiple-outline",
                 })
                 
                 # 3rd prize
                 await publish_sensor("lotto645_third_prize", _safe_int(item.get("rnk3WnAmt")), {
-                    "friendly_name": "ë¡œë˜ 645 3ë“± ìƒê¸ˆ",
+                    "friendly_name": "Lotto 645 3rd Prize",
                     "unit_of_measurement": "KRW",
                     "total_amount": _safe_int(item.get("rnk3SumWnAmt")),
                     "winners": _safe_int(item.get("rnk3WnNope")),
@@ -990,14 +980,14 @@ async def update_sensors():
                 })
                 
                 await publish_sensor("lotto645_third_winners", _safe_int(item.get("rnk3WnNope")), {
-                    "friendly_name": "ë¡œë˜ 645 3ë“± ë‹¹ì²¨ìž",
-                    "unit_of_measurement": "ëª…",
+                    "friendly_name": "Lotto 645 3rd Winners",
+                    "unit_of_measurement": "people",
                     "icon": "mdi:account-group-outline",
                 })
                 
                 # 4th prize
                 await publish_sensor("lotto645_fourth_prize", _safe_int(item.get("rnk4WnAmt")), {
-                    "friendly_name": "ë¡œë˜ 645 4ë“± ìƒê¸ˆ",
+                    "friendly_name": "Lotto 645 4th Prize",
                     "unit_of_measurement": "KRW",
                     "total_amount": _safe_int(item.get("rnk4SumWnAmt")),
                     "winners": _safe_int(item.get("rnk4WnNope")),
@@ -1005,14 +995,14 @@ async def update_sensors():
                 })
                 
                 await publish_sensor("lotto645_fourth_winners", _safe_int(item.get("rnk4WnNope")), {
-                    "friendly_name": "ë¡œë˜ 645 4ë“± ë‹¹ì²¨ìž",
-                    "unit_of_measurement": "ëª…",
+                    "friendly_name": "Lotto 645 4th Winners",
+                    "unit_of_measurement": "people",
                     "icon": "mdi:account-group",
                 })
                 
                 # 5th prize
                 await publish_sensor("lotto645_fifth_prize", _safe_int(item.get("rnk5WnAmt")), {
-                    "friendly_name": "ë¡œë˜ 645 5ë“± ìƒê¸ˆ",
+                    "friendly_name": "Lotto 645 5th Prize",
                     "unit_of_measurement": "KRW",
                     "total_amount": _safe_int(item.get("rnk5SumWnAmt")),
                     "winners": _safe_int(item.get("rnk5WnNope")),
@@ -1020,15 +1010,15 @@ async def update_sensors():
                 })
                 
                 await publish_sensor("lotto645_fifth_winners", _safe_int(item.get("rnk5WnNope")), {
-                    "friendly_name": "ë¡œë˜ 645 5ë“± ë‹¹ì²¨ìž",
-                    "unit_of_measurement": "ëª…",
+                    "friendly_name": "Lotto 645 5th Winners",
+                    "unit_of_measurement": "people",
                     "icon": "mdi:account",
                 })
                 
                 # Total winners
                 await publish_sensor("lotto645_total_winners", _safe_int(item.get("sumWnNope")), {
-                    "friendly_name": "ë¡œë˜ 645 ì´ ë‹¹ì²¨ìž",
-                    "unit_of_measurement": "ëª…",
+                    "friendly_name": "Lotto 645 Total Winners",
+                    "unit_of_measurement": "people",
                     "icon": "mdi:account-group",
                 })
                 
@@ -1044,8 +1034,8 @@ async def update_sensors():
                     await publish_sensor("lotto45_top_frequency_number", top_num.number, {
                         "count": top_num.count,
                         "percentage": top_num.percentage,
-                        "unit_of_measurement": "íšŒ",
-                        "friendly_name": "ë¡œë˜ 45 ìµœë‹¤ ì¶œí˜„ ë²ˆí˜¸",
+                        "unit_of_measurement": "times",
+                        "friendly_name": "Lotto 45 Most Frequent Number",
                         "icon": "mdi:star",
                     })
             except Exception as e:
@@ -1057,13 +1047,13 @@ async def update_sensors():
                 await publish_sensor("lotto45_hot_numbers", 
                     ",".join(map(str, hot_cold.hot_numbers)), {
                         "numbers": hot_cold.hot_numbers,
-                        "friendly_name": "ë¡œë˜ 45 í•« ë„˜ë²„",
+                        "friendly_name": "Lotto 45 Hot Numbers",
                         "icon": "mdi:fire",
                     })
                 await publish_sensor("lotto45_cold_numbers",
                     ",".join(map(str, hot_cold.cold_numbers)), {
                         "numbers": hot_cold.cold_numbers,
-                        "friendly_name": "ë¡œë˜ 45 ì½œë“œ ë„˜ë²„",
+                        "friendly_name": "Lotto 45 Cold Numbers",
                         "icon": "mdi:snowflake",
                     })
             except Exception as e:
@@ -1080,7 +1070,7 @@ async def update_sensors():
                     "roi": stats.roi,
                     "rank_distribution": stats.rank_distribution,
                     "unit_of_measurement": "KRW",
-                    "friendly_name": "ë¡œë˜ 45 ì´ ë‹¹ì²¨ê¸ˆ",
+                    "friendly_name": "Lotto 45 Total Winnings",
                     "icon": "mdi:trophy",
                 })
             except Exception as e:
@@ -1110,7 +1100,7 @@ async def update_sensors():
                         "result": latest_purchase.result,
                         "games": games_info,
                         "games_count": len(latest_purchase.games),
-                        "friendly_name": "최근 구매",
+                        "friendly_name": "Latest Purchase",
                         "icon": "mdi:receipt-text",
                     })
                     
@@ -1145,14 +1135,14 @@ async def update_sensors():
                             "numbers": game.numbers,
                             "round_no": round_no,
                             "result": game_info['result'],
-                            "friendly_name": f"게임 {i}",
+                            "friendly_name": f"Game {i}",
                             "icon": f"mdi:numeric-{i}-box-multiple",
                         })
                         logger.info(f"Game {i} ({game.slot}): {numbers_str} - {game.mode} (Round {round_no})")
                         
                         # Check winning result for each game
                         try:
-                            result_text = "ë¯¸ì¶”ì²¨"
+                            result_text = "Pending"
                             result_icon = "mdi:clock-outline"
                             result_color = "grey"
                             matching_count = 0
@@ -1176,27 +1166,27 @@ async def update_sensors():
                                 
                                 # Determine result text and icon
                                 if rank == 1:
-                                    result_text = "1ë“± ë‹¹ì²¨"
+                                    result_text = "1st Prize"
                                     result_icon = "mdi:trophy"
                                     result_color = "gold"
                                 elif rank == 2:
-                                    result_text = "2ë“± ë‹¹ì²¨"
+                                    result_text = "2nd Prize"
                                     result_icon = "mdi:medal"
                                     result_color = "silver"
                                 elif rank == 3:
-                                    result_text = "3ë“± ë‹¹ì²¨"
+                                    result_text = "3rd Prize"
                                     result_icon = "mdi:medal-outline"
                                     result_color = "bronze"
                                 elif rank == 4:
-                                    result_text = "4ë“± ë‹¹ì²¨"
+                                    result_text = "4th Prize"
                                     result_icon = "mdi:currency-krw"
                                     result_color = "blue"
                                 elif rank == 5:
-                                    result_text = "5ë“± ë‹¹ì²¨"
+                                    result_text = "5th Prize"
                                     result_icon = "mdi:cash"
                                     result_color = "green"
                                 else:
-                                    result_text = "낙첨"
+                                    result_text = "No Win"
                                     result_icon = "mdi:close-circle-outline"
                                     result_color = "red"
                             
@@ -1211,19 +1201,19 @@ async def update_sensors():
                                 "rank": rank,
                                 "result": result_text,
                                 "color": result_color,
-                                "friendly_name": f"게임 {i} 당첨 결과",
+                                "friendly_name": f"Game {i} Result",
                                 "icon": result_icon,
                             })
-                            logger.info(f"Game {i} result: {result_text} (ì¼ì¹˜: {matching_count}ê°œ, Rank: {rank})")
+                            logger.info(f"Game {i} result: {result_text} (Match: {matching_count}, Rank: {rank})")
                             
                         except Exception as e:
                             logger.warning(f"Failed to check winning for game {i}: {e}")
                             # Publish default sensor on error
-                            await publish_sensor(f"lotto45_game_{i}_result", "í™•ì¸ ë¶ˆê°€", {
+                            await publish_sensor(f"lotto45_game_{i}_result", "Check Failed", {
                                 "round_no": round_no,
                                 "my_numbers": game.numbers,
                                 "error": str(e),
-                                "friendly_name": f"게임 {i} 당첨 결과",
+                                "friendly_name": f"Game {i} Result",
                                 "icon": "mdi:alert-circle-outline",
                             })
                     
@@ -1235,7 +1225,7 @@ async def update_sensors():
                     await publish_sensor("lotto45_purchase_history_count", len(history), {
                         "total_games": total_games,
                         "pending_count": pending_count,
-                        "friendly_name": "êµ¬ë§¤ ê¸°ë¡ ìˆ˜",
+                        "friendly_name": "Purchase History Count",
                         "icon": "mdi:counter",
                     })
                     
@@ -1246,7 +1236,7 @@ async def update_sensors():
         from datetime import timezone
         now = datetime.now(timezone.utc).isoformat()
         await publish_sensor("lotto45_last_update", now, {
-            "friendly_name": "ë§ˆì§€ë§‰ ì—…ë°ì´íŠ¸",
+            "friendly_name": "Last Update",
             "icon": "mdi:clock-check-outline",
             # Note: removed device_class="timestamp" to avoid timezone validation issues
         })
@@ -1324,7 +1314,7 @@ async def publish_sensor(entity_id: str, state, attributes: dict = None):
 @app.get("/", response_class=HTMLResponse)
 async def root():
     """Main page"""
-    status_icon = "" if client and client.logged_in else ""
+    status_icon = "✓" if client and client.logged_in else "✗"
     status_text = "Connected" if client and client.logged_in else "Disconnected"
     
     return f"""
@@ -1344,7 +1334,7 @@ async def root():
             </style>
         </head>
         <body>
-            <h1>DH Lottery Lotto 45 <span class="version">v0.6.8</span></h1>
+            <h1>🎰 DH Lottery Lotto 45 <span class="version">v0.6.8</span></h1>
             <div class="status">
                 Status: {status_icon} {status_text}
             </div>
@@ -1356,18 +1346,18 @@ async def root():
             </div>
             <h2>Features v0.6.8</h2>
             <ul>
-                <li> Improved login (RSA encryption + session management)</li>
-                <li> User-Agent rotation (anti-bot detection)</li>
-                <li> Circuit Breaker (continuous failure prevention)</li>
-                <li> HA Sensor integration</li>
+                <li>✓ Improved login (RSA encryption + session management)</li>
+                <li>✓ User-Agent rotation (anti-bot detection)</li>
+                <li>✓ Circuit Breaker (continuous failure prevention)</li>
+                <li>✓ HA Sensor integration</li>
             </ul>
             <h2>Links</h2>
             <ul>
-                <li><a href="api-docs">API Documentation</a> (Ingress-friendly)</li>
-                <li><a href="health">Health Check</a></li>
-                <li><a href="stats">Statistics</a></li>
+                <li><a href="api-docs">📚 API Documentation</a> (Ingress-friendly)</li>
+                <li><a href="health">❤️ Health Check</a></li>
+                <li><a href="stats">📊 Statistics</a></li>
             </ul>
-            <p><strong> Advanced:</strong> For interactive Swagger UI, access directly via port 60199:<br>
+            <p><strong>💡 Advanced:</strong> For interactive Swagger UI, access directly via port 60199:<br>
             <code>http://homeassistant.local:60199/docs</code></p>
         </body>
     </html>
@@ -1511,14 +1501,11 @@ async def buy_lotto(games: list[dict]):
         # Create game slots
         from dh_lotto_645 import DhLotto645, DhLotto645SelMode
         
-        # Mode mapping (Korean to English)
+        # Mode mapping (English only)
         mode_map = {
             "Auto": DhLotto645SelMode.AUTO,
-            "": DhLotto645SelMode.AUTO,
             "Manual": DhLotto645SelMode.MANUAL,
-            "": DhLotto645SelMode.MANUAL,
             "Semi-Auto": DhLotto645SelMode.SEMI_AUTO,
-            "": DhLotto645SelMode.SEMI_AUTO,
         }
         
         slots = []
