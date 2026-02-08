@@ -2,11 +2,6 @@
 
 bashio::log.info "Starting Lotto 45 Add-on v0.6.8..."
 
-# UTF-8 encoding settings
-export LANG=C.UTF-8
-export LC_ALL=C.UTF-8
-export PYTHONIOENCODING=utf-8
-
 # Configuration variables
 export USERNAME=$(bashio::config 'username')
 export PASSWORD=$(bashio::config 'password')
