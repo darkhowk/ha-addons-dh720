@@ -1,6 +1,6 @@
 #!/usr/bin/with-contenv bashio
 
-bashio::log.info "Starting Lotto 45 Add-on v1.0.0..."
+bashio::log.info "Starting Lotto 45 Add-on v0.6.8..."
 
 # UTF-8 encoding settings
 export LANG=C.UTF-8
@@ -15,15 +15,6 @@ export UPDATE_INTERVAL=$(bashio::config 'update_interval')
 export USE_MQTT=$(bashio::config 'use_mqtt')
 export SUPERVISOR_TOKEN="${SUPERVISOR_TOKEN}"
 
-# Beta flag - ensure it's always set correctly
-if bashio::config.true 'is_beta'; then
-    export IS_BETA="true"
-    bashio::log.info "🧪 Running in BETA mode"
-else
-    export IS_BETA="false"
-    bashio::log.info "✓ Running in STABLE mode"
-fi
-
 # MQTT configuration (optional)
 export MQTT_URL=$(bashio::config 'mqtt_url' 'mqtt://homeassistant.local:1883')
 export MQTT_USERNAME=$(bashio::config 'mqtt_username' '')
@@ -36,7 +27,6 @@ bashio::log.info "Configuration loaded"
 bashio::log.info "Username: ${USERNAME}"
 bashio::log.info "Update interval: ${UPDATE_INTERVAL}s"
 bashio::log.info "Use MQTT: ${USE_MQTT}"
-bashio::log.info "Beta version: ${IS_BETA}"
 
 if bashio::config.true 'use_mqtt'; then
     bashio::log.info "MQTT enabled - URL: ${MQTT_URL}"

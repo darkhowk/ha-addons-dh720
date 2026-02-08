@@ -2,7 +2,7 @@
   "name": "DH Lotto 45",
   "version": "1.0.0",
   "slug": "dhlotto45",
-  "description": "DH Lottery Lotto 6/45 Add-on with MQTT Discovery",
+  "description": "DH Lottery Lottoey 6/45 Add-on with MQTT Discovery",
   "url": "https://github.com/redchupa/ha-addons-dhlottery",
   "arch": ["amd64", "armv7", "aarch64"],
   "build_from": {
@@ -21,8 +21,7 @@
     "use_mqtt": true,
     "mqtt_url": "mqtt://homeassistant.local:1883",
     "mqtt_username": "",
-    "mqtt_password": "",
-    "is_beta": false
+    "mqtt_password": ""
   },
   "schema": {
     "username": "str",
@@ -32,8 +31,7 @@
     "use_mqtt": "bool?",
     "mqtt_url": "str?",
     "mqtt_username": "str?",
-    "mqtt_password": "password?",
-    "is_beta": "bool?"
+    "mqtt_password": "password?"
   },
   "ports": {
     "60099/tcp": 60099
