@@ -18,13 +18,14 @@ TOPIC_PREFIX = "dhlotto"
 class MQTTDiscovery:
     """MQTT Discovery helper class"""
     
-    def __init__(self, mqtt_url: str, username: Optional[str] = None, password: Optional[str] = None):
+    def __init__(self, mqtt_url: str, username: Optional[str] = None, password: Optional[str] = None, client_id_suffix: str = ""):
         """Initialize MQTT Discovery
         
         Args:
             mqtt_url: MQTT URL (e.g., "mqtt://192.168.1.118:1883" or "homeassistant.local:1883")
             username: MQTT username (optional)
             password: MQTT password (optional)
+            client_id_suffix: Client ID suffix for beta version (optional)
         """
         # Parse MQTT URL
         self.broker, self.port = self._parse_mqtt_url(mqtt_url)
@@ -33,6 +34,7 @@ class MQTTDiscovery:
         self.client: Optional[mqtt.Client] = None
         self.connected = False
         self.connecting = False
+        self.topic_prefix = TOPIC_PREFIX + client_id_suffix if client_id_suffix else TOPIC_PREFIX
     
     @staticmethod
     def _parse_mqtt_url(mqtt_url: str) -> tuple:
@@ -272,8 +274,8 @@ class MQTTDiscovery:
             name: Friendly name
             command_topic: MQTT topic for commands
             username: DH Lottery username
-            device_name: Device name (e.g., "DH Lottery Lotto 645 (ng410808)")
-            device_identifier: Device identifier (e.g., "dhlotto_ng410808_lotto645")
+            device_name: Device name (e.g., "DH Lottery Lotto 645 (lotteuserid)")
+            device_identifier: Device identifier (e.g., "dhlotto_lotteuserid_lotto645")
             icon: Icon (e.g., 'mdi:ticket-confirmation')
             device_class: Device class (e.g., 'restart')
         """
@@ -324,7 +326,7 @@ class MQTTDiscovery:
     
     def subscribe_to_commands(self, username: str, callback) -> bool:
         """
-        Subscribe to button command topics
+        Subscribe to button command topics and input text commands
         
         Args:
             username: DH Lottery username
@@ -334,21 +336,108 @@ class MQTTDiscovery:
             _LOGGER.warning("Not connected to MQTT broker")
             return False
         
-        # Subscribe to Lotto 645 button commands only
-        button_ids = ["buy_auto_1", "buy_auto_5"]
+        # Subscribe to all buttons and input text
+        button_ids = ["buy_auto_1", "buy_auto_5", "buy_manual"]
         
         try:
             self.client.on_message = callback
             
+            # Subscribe to button commands
             for button_id in button_ids:
                 command_topic = f"homeassistant/button/{TOPIC_PREFIX}_{username}_{button_id}/command"
                 result = self.client.subscribe(command_topic)
                 _LOGGER.info(f"Subscribed to: {command_topic}")
             
-            _LOGGER.info("Waiting for button press events...")
+            # Subscribe to input_text set command
+            input_command_topic = f"homeassistant/text/{TOPIC_PREFIX}_{username}_manual_numbers/set"
+            result = self.client.subscribe(input_command_topic)
+            _LOGGER.info(f"Subscribed to: {input_command_topic}")
+            
+            _LOGGER.info("Waiting for button press and input text events...")
             return True
         except Exception as e:
             _LOGGER.error(f"Failed to subscribe to commands: {e}")
+            return False
+    
+    def publish_input_text_discovery(
+        self,
+        input_id: str,
+        name: str,
+        state_topic: str,
+        command_topic: str,
+        username: str,
+        device_name: str,
+        device_identifier: str,
+        icon: Optional[str] = None,
+        mode: str = "text",
+        min_length: int = 0,
+        max_length: int = 255,
+        pattern: Optional[str] = None,
+    ) -> bool:
+        """
+        Publish input_text (text entity) discovery configuration
+        
+        Args:
+            input_id: Input ID (e.g., 'manual_numbers')
+            name: Friendly name
+            state_topic: MQTT topic for state
+            command_topic: MQTT topic for commands (set value)
+            username: DH Lottery username
+            device_name: Device name
+            device_identifier: Device identifier
+            icon: Icon (e.g., 'mdi:numeric')
+            mode: Mode ('text' or 'password')
+            min_length: Minimum length (default: 0)
+            max_length: Maximum length (default: 255)
+            pattern: Regex pattern for validation
+        """
+        if not self.connected:
+            _LOGGER.warning("Not connected to MQTT broker")
+            return False
+        
+        # Discovery topic: homeassistant/text/dhlotto_USERNAME_INPUT_ID/config
+        discovery_topic = f"homeassistant/text/{TOPIC_PREFIX}_{username}_{input_id}/config"
+        
+        # Unique ID: dhlotto_USERNAME_INPUT_ID
+        unique_id = f"{TOPIC_PREFIX}_{username}_{input_id}"
+        
+        # Entity ID: text.dhlotto_USERNAME_INPUT_ID
+        object_id = f"{TOPIC_PREFIX}_{username}_{input_id}"
+        
+        config = {
+            "name": name,
+            "unique_id": unique_id,
+            "object_id": object_id,
+            "state_topic": state_topic,
+            "command_topic": command_topic,
+            "mode": mode,
+            "min": min_length,
+            "max": max_length,
+            "device": {
+                "identifiers": [device_identifier],
+                "name": device_name,
+                "manufacturer": "DH Lottery",
+                "model": "Add-on",
+                "sw_version": "1.0.0",
+            },
+        }
+        
+        # Optional fields
+        if icon:
+            config["icon"] = icon
+        if pattern:
+            config["pattern"] = pattern
+        
+        try:
+            payload = json.dumps(config)
+            _LOGGER.debug(f"Publishing input_text discovery: {discovery_topic}")
+            _LOGGER.debug(f"Config: {payload}")
+            result = self.client.publish(discovery_topic, payload, qos=1, retain=True)
+            result.wait_for_publish()
+            _LOGGER.info(f"Published input_text discovery: text.{object_id}")
+            return True
+        except Exception as e:
+            _LOGGER.error(f"Failed to publish input_text discovery for {input_id}: {e}")
             return False
 
 
