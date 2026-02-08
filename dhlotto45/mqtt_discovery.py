@@ -168,6 +168,7 @@ class MQTTDiscovery:
             "unique_id": unique_id,
             "object_id": object_id,
             "state_topic": state_topic,
+            "has_entity_name": False,  # Prevent device name prefix
             "device": {
                 "identifiers": [device_identifier],
                 "name": device_name,
@@ -297,6 +298,7 @@ class MQTTDiscovery:
             "unique_id": unique_id,
             "object_id": object_id,
             "command_topic": command_topic,
+            "has_entity_name": False,  # Prevent device name prefix
             "device": {
                 "identifiers": [device_identifier],
                 "name": device_name,
@@ -413,6 +415,7 @@ class MQTTDiscovery:
             "mode": mode,
             "min": min_length,
             "max": max_length,
+            "has_entity_name": False,  # Prevent device name prefix
             "device": {
                 "identifiers": [device_identifier],
                 "name": device_name,
