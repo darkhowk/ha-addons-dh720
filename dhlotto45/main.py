@@ -9,8 +9,14 @@ import os
 import asyncio
 import logging
 from typing import Optional, Dict, List
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timezone, timedelta
 from contextlib import asynccontextmanager
+
+try:
+    from zoneinfo import ZoneInfo
+    _TZ_KST = ZoneInfo("Asia/Seoul")
+except ImportError:
+    _TZ_KST = timezone(timedelta(hours=9))
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -119,6 +125,22 @@ def _get_lotto645_item(data: dict) -> dict:
     if items:
         return items[0]
     return data
+
+
+def is_purchase_available_now() -> bool:
+    """
+    동행복권 구매 가능 시간(KST)이면 True.
+    weekdays: 06:00-24:00, saturday: 06:00-20:00, sunday: 06:00-24:00
+    """
+    now = datetime.now(_TZ_KST)
+    wd = now.weekday()  # 0=Mon .. 6=Sun
+    minutes = now.hour * 60 + now.minute  # 06:00 = 360, 20:00 = 1200
+    if minutes < 360:  # 00:00 ~ 05:59 모든 요일 구매 불가
+        return False
+    if wd == 5:  # Saturday: 20:00~24:00 구매 불가
+        if minutes >= 1200:
+            return False
+    return True
 
 
 async def register_buttons_for_account(account: AccountData):
@@ -501,18 +523,21 @@ def is_ingress_request(request: Request) -> bool:
 
 
 async def background_tasks_for_account(account: AccountData):
-    """Background tasks"""
+    """Background tasks. 구매 불가 시간대에는 동기화/로그인을 수행하지 않음."""
     username = account.username
-    
-    # Skip if not logged in
+
     if not account.client or not account.client.logged_in:
         logger.warning(f"[BG][{username}] Skipping background task - not logged in")
         return
-    
+
     await asyncio.sleep(10)
-    
+
     while True:
         try:
+            if not is_purchase_available_now():
+                logger.info(f"[BG][{username}] Skipping sync (purchase unavailable time, KST)")
+                await asyncio.sleep(config["update_interval"])
+                continue
             await update_sensors_for_account(account)
             await asyncio.sleep(config["update_interval"])
         except asyncio.CancelledError:
@@ -523,9 +548,13 @@ async def background_tasks_for_account(account: AccountData):
 
 
 async def update_sensors_for_account(account: AccountData):
-    """Update all sensors for account - FULL VERSION"""
+    """Update all sensors for account. 구매 불가 시간대에는 로그인/API 호출 없이 스킵."""
     username = account.username
-    
+
+    if not is_purchase_available_now():
+        logger.info(f"[SENSOR][{username}] Skipping update (purchase unavailable time, KST)")
+        return
+
     if not account.client or not account.client.logged_in:
         logger.warning(f"[SENSOR][{username}] Not logged in, attempting login...")
         try:
