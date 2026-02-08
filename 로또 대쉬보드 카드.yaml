@@ -1,231 +1,331 @@
-type: vertical-stack
+type: grid
 cards:
-  - type: custom:button-card
-    entity: sensor.dhlotto_xxxxxx_lotto645_winning_numbers
-    show_name: false
-    show_state: false
-    show_icon: false
-    styles:
-      card:
-        - background: rgba(255, 255, 255, 0.03)
-        - border: 1px solid rgba(255, 215, 0, 0.3)
-        - border-radius: 16px
-        - padding: 20px
-        - backdrop-filter: blur(10px)
-      grid:
-        - grid-template-areas: "\"content\""
-        - grid-template-columns: 1fr
-      custom_fields:
-        content:
-          - width: 100%
-          - display: flex
-          - justify-content: center
-    custom_fields:
-      content: |
-        [[[
-          const state = entity.state;
-          if (!state || state === 'unknown') return '데이터 로딩 중...';
-          
-          const roundObj = states['sensor.dhlotto_xxxxxx_lotto645_round'];
-          const roundNum = roundObj ? roundObj.state : '??';
-          
-          const parts = state.split(' + ');
-          
-          // 💡 .slice(1)을 추가하여 첫 번째 숫자를 제외합니다.
-          const nums = parts[0].split(',')
-                             .map(n => n.trim())
-                             .slice(1); 
-          
-          const bonus = parts[1];
-          
-          function color(n) {
-            n = parseInt(n);
-            if (n <= 10) return '#fbc400';
-            if (n <= 20) return '#69c8f2';
-            if (n <= 30) return '#ff7272';
-            if (n <= 40) return '#aaa';
-            return '#b0d840';
-          }
-          
-          let out = `
-            <div style="width:100%;display:flex;flex-direction:column;align-items:center;">
-              <div style="font-size:18px;font-weight:700;color:gold;margin-bottom:14px;">
-                🎱 ${roundNum}회 당첨번호
-              </div>
-              <div style="display:flex;justify-content:center;align-items:center;gap:8px;">
-          `;
-          
-          for (let i = 0; i < nums.length; i++) {
-            out += `<div style="width:33px;height:33px;border-radius:50%;background:${color(nums[i])};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;color:#000;box-shadow:0 2px 6px rgba(0,0,0,0.3);">${nums[i]}</div>`;
-          }
-          
-          if (bonus) {
-            out += `
-              <div style="width:24px;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:rgba(255,255,255,0.7);">+</div>
-              <div style="width:33px;height:33px;border-radius:50%;background:${color(bonus)};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;color:#000;border:2px solid gold;box-shadow:0 2px 6px rgba(0,0,0,0.3);">${bonus}</div>
-            `;
-          }
-          
-          out += `</div></div>`;
-          return out;
-        ]]]
-  - type: custom:button-card
-    entity: sensor.dhlotto_xxxxxx_lotto45_game_1
-    show_name: false
-    show_state: false
-    show_icon: false
-    styles:
-      card:
-        - background: rgba(255, 255, 255, 0.03)
-        - border: 1px solid rgba(255, 215, 0, 0.3)
-        - border-radius: 16px
-        - padding: 20px
-        - backdrop-filter: blur(10px)
-      grid:
-        - grid-template-areas: "\"content\""
-        - grid-template-columns: 1fr
-      custom_fields:
-        content:
-          - width: 100%
-          - display: flex
-          - justify-content: center
-    custom_fields:
-      content: |
-        [[[
-          const histList = [
-            'sensor.dhlotto_xxxxxx_lotto45_game_1',
-            'sensor.dhlotto_xxxxxx_lotto45_game_2',
-            'sensor.dhlotto_xxxxxx_lotto45_game_3',
-            'sensor.dhlotto_xxxxxx_lotto45_game_4',
-            'sensor.dhlotto_xxxxxx_lotto45_game_5'
-          ];
-
-          function histColor(num) {
-            const n = parseInt(num);
-            if (n <= 10) return '#fbc400';
-            if (n <= 20) return '#69c8f2';
-            if (n <= 30) return '#ff7272';
-            if (n <= 40) return '#aaa';
-            return '#b0d840';
-          }
-
-          let items = '';
-          for (let i = 0; i < histList.length; i++) {
-            const ent = states[histList[i]];
-            if (!ent || ent.state === 'unavailable' || ent.state === 'unknown' || ent.state === 'none') continue;
-
-            // 💡 결과 센서 값을 직접 가져옵니다.
-            const resultEnt = states[histList[i] + '_result'];
-            const resultValue = resultEnt ? resultEnt.state : '확인중';
-            
-            const slot = ent.attributes['슬롯'] || String.fromCharCode(65 + i);
-            const mode = ent.attributes['선택'] || '자동';
-            
-            // 당첨 여부 확인 (낙첨이 아니고, 확인중이 아닐 때 강조)
-            const isWin = resultValue.includes('등');
-            const isLose = resultValue === '낙첨';
-
-            const nums = ent.state.split(',').map(n => n.trim()).filter(n => n !== "");
-            if (nums.length < 6) continue;
-
-            let balls = `<div style="flex:1;display:flex;justify-content:center;gap:6px;">`;
-            for (const n of nums) {
-              balls += `<div style="width:28px;height:28px;border-radius:50%;background:${histColor(n)};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:#000;box-shadow:0 2px 4px rgba(0,0,0,0.2);">${n}</div>`;
-            }
-            balls += '</div>';
-
-            // 결과 텍스트 스타일 결정
-            let resultStyle = 'color: rgba(255,255,255,0.6);';
-            if (isWin) resultStyle = 'color: gold; font-weight: 800;';
-            else if (isLose) resultStyle = 'color: #f44; opacity: 0.8;';
-
-            items += `
-              <div style="
-                display:flex;
-                align-items:center;
-                padding:10px 12px;
-                background:${isWin ? 'rgba(255,215,0,0.15)' : 'rgba(255,255,255,0.03)'};
-                border-radius:10px;
-                border:1px solid ${isWin ? 'gold' : 'rgba(255,255,255,0.1)'};
-                margin-bottom:8px;
-              ">
-                <div style="width:65px;font-size:12px;color:rgba(255,255,255,0.6);">${slot}(${mode})</div>
-                ${balls}
-                <div style="width:65px;font-size:13px;text-align:right; ${resultStyle}">
-                  ${isWin ? '🏆 ' : ''}${resultValue}
-                </div>
-              </div>
-            `;
-          }
-
-          if (!items) return '<div style="padding:20px;text-align:center;color:grey;">구매 내역 데이터가 없습니다.</div>';
-
-          return `
-            <div style="width:100%;display:flex;flex-direction:column;align-items:center;">
-              <div style="font-size:16px;font-weight:700;color:gold;margin-bottom:14px;">📋 내 구매 내역</div>
-              <div style="display:flex;flex-direction:column;width:100%;">${items}</div>
-            </div>
-          `;
-        ]]]
-  - type: horizontal-stack
+  - type: vertical-stack
     cards:
       - type: custom:button-card
-        entity: button.dhlotto_xxxxxx_buy_auto_5
-        name: 5장 구매
-        icon: mdi:cart-outline
+        entity: sensor.dhlotto_account1_lotto645_winning_numbers
+        show_name: false
         show_state: false
-        tap_action:
-          action: call-service
-          service: button.press
-          service_data:
-            entity_id: button.dhlotto_xxxxxx_buy_auto_5
-        confirmation:
-          text: 로또 5게임을 구매하시겠습니까?
+        show_icon: false
         styles:
           card:
-            - background: rgba(255, 255, 255, 0.05)
+            - background: rgba(255, 255, 255, 0.03)
             - border: 1px solid rgba(255, 215, 0, 0.3)
-            - border-radius: 12px
-            - padding: 12px 8px
+            - border-radius: 16px
+            - padding: 20px
             - backdrop-filter: blur(10px)
-          icon:
-            - color: gold
-            - width: 22px
-          name:
-            - font-size: 12px
-            - font-weight: 600
-            - color: rgba(255, 255, 255, 0.9)
-            - margin-top: 4px
           grid:
-            - grid-template-areas: "\"i\" \"n\""
-            - grid-template-rows: 1fr min-content
+            - grid-template-areas: "\"content\""
+            - grid-template-columns: 1fr
+          custom_fields:
+            content:
+              - width: 100%
+              - display: flex
+              - justify-content: center
+        custom_fields:
+          content: |
+            [[[
+              const state = entity.state;
+              if (!state || state === 'unknown') return '데이터 로딩 중...';
+              
+              const roundObj = states['sensor.dhlotto_account1_lotto645_round'];
+              const roundNum = roundObj ? roundObj.state : '??';
+              
+              const parts = state.split(' + ');
+              
+              // 💡 .slice(1)을 추가하여 첫 번째 숫자를 제외합니다.
+              const nums = parts[0].split(',')
+                                 .map(n => n.trim())
+                                 .slice(1); 
+              
+              const bonus = parts[1];
+              
+              function color(n) {
+                n = parseInt(n);
+                if (n <= 10) return '#fbc400';
+                if (n <= 20) return '#69c8f2';
+                if (n <= 30) return '#ff7272';
+                if (n <= 40) return '#aaa';
+                return '#b0d840';
+              }
+              
+              let out = `
+                <div style="width:100%;display:flex;flex-direction:column;align-items:center;">
+                  <div style="font-size:18px;font-weight:700;color:gold;margin-bottom:14px;">
+                    🎱 ${roundNum}회 당첨번호
+                  </div>
+                  <div style="display:flex;justify-content:center;align-items:center;gap:8px;">
+              `;
+              
+              for (let i = 0; i < nums.length; i++) {
+                out += `<div style="width:33px;height:33px;border-radius:50%;background:${color(nums[i])};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;color:#000;box-shadow:0 2px 6px rgba(0,0,0,0.3);">${nums[i]}</div>`;
+              }
+              
+              if (bonus) {
+                out += `
+                  <div style="width:24px;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:rgba(255,255,255,0.7);">+</div>
+                  <div style="width:33px;height:33px;border-radius:50%;background:${color(bonus)};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;color:#000;border:2px solid gold;box-shadow:0 2px 6px rgba(0,0,0,0.3);">${bonus}</div>
+                `;
+              }
+              
+              out += `</div></div>`;
+              return out;
+            ]]]
       - type: custom:button-card
-        entity: button.dhlotto_xxxxxx_buy_auto_1
-        name: 1장 구매
-        icon: mdi:ticket
+        entity: sensor.dhlotto_account1_lotto45_game_1
+        show_name: false
         show_state: false
-        tap_action:
-          action: call-service
-          service: button.press
-          service_data:
-            entity_id: button.dhlotto_xxxxxx_buy_auto_1
-        confirmation:
-          text: 로또 1게임을 구매하시겠습니까?
+        show_icon: false
         styles:
           card:
-            - background: rgba(255, 255, 255, 0.05)
+            - background: rgba(255, 255, 255, 0.03)
             - border: 1px solid rgba(255, 215, 0, 0.3)
-            - border-radius: 12px
-            - padding: 12px 8px
+            - border-radius: 16px
+            - padding: 20px
             - backdrop-filter: blur(10px)
-          icon:
-            - color: gold
-            - width: 22px
-          name:
-            - font-size: 12px
-            - font-weight: 600
-            - color: rgba(255, 255, 255, 0.9)
-            - margin-top: 4px
           grid:
-            - grid-template-areas: "\"i\" \"n\""
-            - grid-template-rows: 1fr min-content
+            - grid-template-areas: "\"content\""
+            - grid-template-columns: 1fr
+          custom_fields:
+            content:
+              - width: 100%
+              - display: flex
+              - justify-content: center
+        custom_fields:
+          content: |
+            [[[
+              const histList = [
+                'sensor.dhlotto_account1_lotto45_game_1',
+                'sensor.dhlotto_account1_lotto45_game_2',
+                'sensor.dhlotto_account1_lotto45_game_3',
+                'sensor.dhlotto_account1_lotto45_game_4',
+                'sensor.dhlotto_account1_lotto45_game_5'
+              ];
+
+              function histColor(num) {
+                const n = parseInt(num);
+                if (n <= 10) return '#fbc400';
+                if (n <= 20) return '#69c8f2';
+                if (n <= 30) return '#ff7272';
+                if (n <= 40) return '#aaa';
+                return '#b0d840';
+              }
+
+              let items = '';
+              for (let i = 0; i < histList.length; i++) {
+                const ent = states[histList[i]];
+                if (!ent || ent.state === 'unavailable' || ent.state === 'unknown' || ent.state === 'none') continue;
+
+                // 💡 결과 센서 값을 직접 가져옵니다.
+                const resultEnt = states[histList[i] + '_result'];
+                const resultValue = resultEnt ? resultEnt.state : '확인중';
+                
+                const slot = ent.attributes['슬롯'] || String.fromCharCode(65 + i);
+                const mode = ent.attributes['선택'] || '자동';
+                
+                // 당첨 여부 확인 (낙첨이 아니고, 확인중이 아닐 때 강조)
+                const isWin = resultValue.includes('등');
+                const isLose = resultValue === '낙첨';
+
+                const nums = ent.state.split(',').map(n => n.trim()).filter(n => n !== "");
+                if (nums.length < 6) continue;
+
+                let balls = `<div style="flex:1;display:flex;justify-content:center;gap:6px;">`;
+                for (const n of nums) {
+                  balls += `<div style="width:28px;height:28px;border-radius:50%;background:${histColor(n)};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:#000;box-shadow:0 2px 4px rgba(0,0,0,0.2);">${n}</div>`;
+                }
+                balls += '</div>';
+
+                // 결과 텍스트 스타일 결정
+                let resultStyle = 'color: rgba(255,255,255,0.6);';
+                if (isWin) resultStyle = 'color: gold; font-weight: 800;';
+                else if (isLose) resultStyle = 'color: #f44; opacity: 0.8;';
+
+                items += `
+                  <div style="
+                    display:flex;
+                    align-items:center;
+                    padding:10px 12px;
+                    background:${isWin ? 'rgba(255,215,0,0.15)' : 'rgba(255,255,255,0.03)'};
+                    border-radius:10px;
+                    border:1px solid ${isWin ? 'gold' : 'rgba(255,255,255,0.1)'};
+                    margin-bottom:8px;
+                  ">
+                    <div style="width:65px;font-size:12px;color:rgba(255,255,255,0.6);">${slot}(${mode})</div>
+                    ${balls}
+                    <div style="width:65px;font-size:13px;text-align:right; ${resultStyle}">
+                      ${isWin ? '🏆 ' : ''}${resultValue}
+                    </div>
+                  </div>
+                `;
+              }
+
+              if (!items) return '<div style="padding:20px;text-align:center;color:grey;">구매 내역 데이터가 없습니다.</div>';
+
+              return `
+                <div style="width:100%;display:flex;flex-direction:column;align-items:center;">
+                  <div style="font-size:16px;font-weight:700;color:gold;margin-bottom:14px;">📋 레추 구매 내역</div>
+                  <div style="display:flex;flex-direction:column;width:100%;">${items}</div>
+                </div>
+              `;
+            ]]]
+      - type: custom:button-card
+        entity: sensor.dhlotto_account1_lotto45_game_1
+        show_name: false
+        show_state: false
+        show_icon: false
+        styles:
+          card:
+            - background: rgba(255, 255, 255, 0.03)
+            - border: 1px solid rgba(255, 215, 0, 0.3)
+            - border-radius: 16px
+            - padding: 20px
+            - backdrop-filter: blur(10px)
+          grid:
+            - grid-template-areas: "\"content\""
+            - grid-template-columns: 1fr
+          custom_fields:
+            content:
+              - width: 100%
+              - display: flex
+              - justify-content: center
+        custom_fields:
+          content: |
+            [[[
+              const histList = [
+                'sensor.dhlotto_account2_lotto45_game_1',
+                'sensor.dhlotto_account2_lotto45_game_2',
+                'sensor.dhlotto_account2_lotto45_game_3',
+                'sensor.dhlotto_account2_lotto45_game_4',
+                'sensor.dhlotto_account2_lotto45_game_5'
+              ];
+
+              function histColor(num) {
+                const n = parseInt(num);
+                if (n <= 10) return '#fbc400';
+                if (n <= 20) return '#69c8f2';
+                if (n <= 30) return '#ff7272';
+                if (n <= 40) return '#aaa';
+                return '#b0d840';
+              }
+
+              let items = '';
+              for (let i = 0; i < histList.length; i++) {
+                const ent = states[histList[i]];
+                if (!ent || ent.state === 'unavailable' || ent.state === 'unknown' || ent.state === 'none') continue;
+
+                // 💡 결과 센서 값을 직접 가져옵니다.
+                const resultEnt = states[histList[i] + '_result'];
+                const resultValue = resultEnt ? resultEnt.state : '확인중';
+                
+                const slot = ent.attributes['슬롯'] || String.fromCharCode(65 + i);
+                const mode = ent.attributes['선택'] || '자동';
+                
+                // 당첨 여부 확인 (낙첨이 아니고, 확인중이 아닐 때 강조)
+                const isWin = resultValue.includes('등');
+                const isLose = resultValue === '낙첨';
+
+                const nums = ent.state.split(',').map(n => n.trim()).filter(n => n !== "");
+                if (nums.length < 6) continue;
+
+                let balls = `<div style="flex:1;display:flex;justify-content:center;gap:6px;">`;
+                for (const n of nums) {
+                  balls += `<div style="width:28px;height:28px;border-radius:50%;background:${histColor(n)};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:#000;box-shadow:0 2px 4px rgba(0,0,0,0.2);">${n}</div>`;
+                }
+                balls += '</div>';
+
+                // 결과 텍스트 스타일 결정
+                let resultStyle = 'color: rgba(255,255,255,0.6);';
+                if (isWin) resultStyle = 'color: gold; font-weight: 800;';
+                else if (isLose) resultStyle = 'color: #f44; opacity: 0.8;';
+
+                items += `
+                  <div style="
+                    display:flex;
+                    align-items:center;
+                    padding:10px 12px;
+                    background:${isWin ? 'rgba(255,215,0,0.15)' : 'rgba(255,255,255,0.03)'};
+                    border-radius:10px;
+                    border:1px solid ${isWin ? 'gold' : 'rgba(255,255,255,0.1)'};
+                    margin-bottom:8px;
+                  ">
+                    <div style="width:65px;font-size:12px;color:rgba(255,255,255,0.6);">${slot}(${mode})</div>
+                    ${balls}
+                    <div style="width:65px;font-size:13px;text-align:right; ${resultStyle}">
+                      ${isWin ? '🏆 ' : ''}${resultValue}
+                    </div>
+                  </div>
+                `;
+              }
+
+              if (!items) return '<div style="padding:20px;text-align:center;color:grey;">구매 내역 데이터가 없습니다.</div>';
+
+              return `
+                <div style="width:100%;display:flex;flex-direction:column;align-items:center;">
+                  <div style="font-size:16px;font-weight:700;color:gold;margin-bottom:14px;">📋 제리 구매 내역</div>
+                  <div style="display:flex;flex-direction:column;width:100%;">${items}</div>
+                </div>
+              `;
+            ]]]
+      - type: horizontal-stack
+        cards:
+          - type: custom:button-card
+            entity: button.dhlotto_account2_buy_auto_1
+            name: 제리 1장 자동 구매
+            icon: mdi:cart-outline
+            show_state: false
+            tap_action:
+              action: call-service
+              service: button.press
+              service_data:
+                entity_id: button.dhlotto_account2_buy_auto_1
+            confirmation:
+              text: 로또 1게임을 구매하시겠습니까?
+            styles:
+              card:
+                - background: rgba(255, 255, 255, 0.05)
+                - border: 1px solid rgba(255, 215, 0, 0.3)
+                - border-radius: 12px
+                - padding: 12px 8px
+                - backdrop-filter: blur(10px)
+              icon:
+                - color: gold
+                - width: 22px
+              name:
+                - font-size: 12px
+                - font-weight: 600
+                - color: rgba(255, 255, 255, 0.9)
+                - margin-top: 4px
+              grid:
+                - grid-template-areas: "\"i\" \"n\""
+                - grid-template-rows: 1fr min-content
+          - type: custom:button-card
+            entity: button.dhlotto_account1_buy_auto_1
+            name: 레추 1장 자동 구매
+            icon: mdi:cart-outline
+            show_state: false
+            tap_action:
+              action: call-service
+              service: button.press
+              service_data:
+                entity_id: button.dhlotto_account1_buy_auto_1
+            confirmation:
+              text: 로또 1게임을 구매하시겠습니까?
+            styles:
+              card:
+                - background: rgba(255, 255, 255, 0.05)
+                - border: 1px solid rgba(255, 215, 0, 0.3)
+                - border-radius: 12px
+                - padding: 12px 8px
+                - backdrop-filter: blur(10px)
+              icon:
+                - color: gold
+                - width: 22px
+              name:
+                - font-size: 12px
+                - font-weight: 600
+                - color: rgba(255, 255, 255, 0.9)
+                - margin-top: 4px
+              grid:
+                - grid-template-areas: "\"i\" \"n\""
+                - grid-template-rows: 1fr min-content
