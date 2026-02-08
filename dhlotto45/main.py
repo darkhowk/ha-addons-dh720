@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-Lotto 45 Add-on Main Application v2.0.0
+Lotto 45 Add-on Main Application v1.0.0
 Home Assistant Add-on for DH Lottery 6/45
-v2.0.0 - Multi-account support with full sensor suite
+v1.0.0 - Multi-account support with full sensor suite
 """
 
 import os
@@ -138,6 +138,7 @@ async def register_buttons_for_account(account: AccountData):
         ("buy_auto_1", "1 게임 자동 구매", "mdi:ticket-confirmation"),
         ("buy_auto_5", "5 게임 자동 구매", "mdi:ticket-confirmation-outline"),
         ("buy_manual", "1 게임 수동 구매", "mdi:hand-pointing-right"),
+        ("generate_random", "랜덤 번호 생성", "mdi:dice-multiple"),
     ]:
         button_topic = f"homeassistant/button/{mqtt_client.topic_prefix}_{username}_{button_id}/command"
         mqtt_client.publish_button_discovery(
@@ -211,6 +212,24 @@ def on_button_command(client_mqtt, userdata, message):
         # Button
         button_suffix = without_prefix[len(username) + 1:]
         logger.info(f"[BUTTON][{username}] Button pressed: {button_suffix}")
+
+        # Handle random number generation button
+        if button_suffix == "generate_random":
+            logger.info(f"[RANDOM][{username}] Generating random numbers")
+            random_numbers = DhLottoAnalyzer.generate_random_numbers(6)
+            random_str = ",".join(map(str, random_numbers))
+            logger.info(f"[RANDOM][{username}] Generated: {random_str}")
+            
+            # Update manual_numbers_state
+            account.manual_numbers_state = random_str
+            
+            # Publish to input_text state topic
+            state_topic = f"homeassistant/text/{mqtt_client.topic_prefix}_{username}_manual_numbers/state"
+            client_mqtt.publish(state_topic, random_str, qos=1, retain=True)
+            
+            logger.info(f"[RANDOM][{username}] Random numbers published to input text")
+            return
+
         
         if event_loop and event_loop.is_running():
             asyncio.run_coroutine_threadsafe(
@@ -388,7 +407,7 @@ async def init_clients():
                 # Subscribe to each account's buttons
                 for account in accounts.values():
                     if account.enabled and account.client and account.client.logged_in:
-                        button_ids = ["buy_auto_1", "buy_auto_5", "buy_manual"]
+                        button_ids = ["buy_auto_1", "buy_auto_5", "buy_manual", "generate_random"]
                         
                         # Subscribe to button commands
                         for button_id in button_ids:
@@ -432,7 +451,7 @@ async def lifespan(app: FastAPI):
     """Lifecycle"""
     global event_loop
     
-    logger.info("Starting v2.0.0 Multi-Account...")
+    logger.info("Starting v1.0.0 Multi-Account...")
     
     event_loop = asyncio.get_running_loop()
     await init_clients()
@@ -455,7 +474,7 @@ async def lifespan(app: FastAPI):
     await cleanup_clients()
 
 
-app = FastAPI(title="Lotto 45 Multi", version="2.0.0", lifespan=lifespan)
+app = FastAPI(title="Lotto 45 Multi", version="1.0.0", lifespan=lifespan)
 
 
 async def background_tasks_for_account(account: AccountData):
@@ -802,6 +821,103 @@ async def update_sensors_for_account(account: AccountData):
             except Exception as e:
                 logger.warning(f"[SENSOR][{username}] Failed purchase history: {e}")
         
+        # Hot/Cold Numbers Analysis
+        if config["enable_lotto645"] and account.analyzer:
+            try:
+                hot_cold_data = await account.analyzer.async_get_hot_cold_numbers(recent_rounds=20)
+                
+                # Hot numbers sensor
+                hot_numbers_str = ", ".join(map(str, hot_cold_data.hot_numbers))
+                await publish_sensor_for_account(account, "lotto45_hot_numbers", hot_numbers_str, {
+                    "numbers": hot_cold_data.hot_numbers,
+                    "friendly_name": "가장 많이 나온 번호 (최근 20회)",
+                    "icon": "mdi:fire",
+                })
+                
+                # Cold numbers sensor
+                cold_numbers_str = ", ".join(map(str, hot_cold_data.cold_numbers))
+                await publish_sensor_for_account(account, "lotto45_cold_numbers", cold_numbers_str, {
+                    "numbers": hot_cold_data.cold_numbers,
+                    "friendly_name": "가장 적게 나온 번호 (최근 20회)",
+                    "icon": "mdi:snowflake",
+                })
+                
+                # Most frequent numbers sensor
+                top_freq_str = ", ".join([f"{nf.number}({nf.count})" for nf in hot_cold_data.most_frequent[:5]])
+                await publish_sensor_for_account(account, "lotto45_most_frequent_numbers", top_freq_str, {
+                    "top_5": [{"number": nf.number, "count": nf.count, "percentage": nf.percentage} 
+                             for nf in hot_cold_data.most_frequent[:5]],
+                    "friendly_name": "최다 출현 번호 (전체)",
+                    "icon": "mdi:chart-bar",
+                })
+                
+                logger.info(f"[SENSOR][{username}] Hot/Cold numbers updated")
+                
+            except Exception as e:
+                logger.warning(f"[SENSOR][{username}] Failed to update hot/cold numbers: {e}")
+        
+        # Winning Probability Sensors
+        if config["enable_lotto645"]:
+            try:
+                # Calculate probabilities (fixed values based on combinatorics)
+                # Total combinations: C(45, 6) = 8,145,060
+                total_combinations = 8145060
+                
+                # 1st prize: 6 numbers match = 1 / 8,145,060
+                prob_1st = (1 / total_combinations) * 100
+                await publish_sensor_for_account(account, "lotto645_probability_rank1", f"{prob_1st:.7f}", {
+                    "probability_decimal": prob_1st,
+                    "probability_fraction": "1/8,145,060",
+                    "unit_of_measurement": "%",
+                    "friendly_name": "1등 당첨 확률",
+                    "icon": "mdi:trophy",
+                })
+                
+                # 2nd prize: 5 numbers + bonus = 6 / 8,145,060
+                prob_2nd = (6 / total_combinations) * 100
+                await publish_sensor_for_account(account, "lotto645_probability_rank2", f"{prob_2nd:.7f}", {
+                    "probability_decimal": prob_2nd,
+                    "probability_fraction": "6/8,145,060",
+                    "unit_of_measurement": "%",
+                    "friendly_name": "2등 당첨 확률",
+                    "icon": "mdi:medal",
+                })
+                
+                # 3rd prize: 5 numbers = 234 / 8,145,060
+                prob_3rd = (234 / total_combinations) * 100
+                await publish_sensor_for_account(account, "lotto645_probability_rank3", f"{prob_3rd:.5f}", {
+                    "probability_decimal": prob_3rd,
+                    "probability_fraction": "234/8,145,060",
+                    "unit_of_measurement": "%",
+                    "friendly_name": "3등 당첨 확률",
+                    "icon": "mdi:medal-outline",
+                })
+                
+                # 4th prize: 4 numbers = 11,115 / 8,145,060
+                prob_4th = (11115 / total_combinations) * 100
+                await publish_sensor_for_account(account, "lotto645_probability_rank4", f"{prob_4th:.4f}", {
+                    "probability_decimal": prob_4th,
+                    "probability_fraction": "11,115/8,145,060",
+                    "unit_of_measurement": "%",
+                    "friendly_name": "4등 당첨 확률",
+                    "icon": "mdi:currency-krw",
+                })
+                
+                # 5th prize: 3 numbers = 185,220 / 8,145,060
+                prob_5th = (185220 / total_combinations) * 100
+                await publish_sensor_for_account(account, "lotto645_probability_rank5", f"{prob_5th:.3f}", {
+                    "probability_decimal": prob_5th,
+                    "probability_fraction": "185,220/8,145,060",
+                    "unit_of_measurement": "%",
+                    "friendly_name": "5등 당첨 확률",
+                    "icon": "mdi:cash",
+                })
+                
+                logger.info(f"[SENSOR][{username}] Winning probabilities updated")
+                
+            except Exception as e:
+                logger.warning(f"[SENSOR][{username}] Failed to update winning probabilities: {e}")
+        
         # Update time
         now = datetime.now(timezone.utc).isoformat()
         await publish_sensor_for_account(account, "lotto45_last_update", now, {
@@ -874,14 +990,14 @@ async def root():
     <html>
         <head>
             <meta charset="UTF-8">
-            <title>Lotto 45 v2.0.0</title>
+            <title>Lotto 45 v1.0.0</title>
             <style>
                 body {{ font-family: Arial; margin: 40px; }}
                 .info {{ background: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0; }}
             </style>
         </head>
         <body>
-            <h1>🎰 Lotto 45 <span style="color:#666;">v2.0.0 Multi-Account</span></h1>
+            <h1>🎰 Lotto 45 <span style="color:#666;">v1.0.0 Multi-Account</span></h1>
             <div class="info">
                 <h2>Accounts ({len(accounts)})</h2>
                 {accounts_html}
@@ -914,7 +1030,7 @@ async def health():
     
     return {
         "status": "ok" if logged_in_count > 0 else "degraded",
-        "version": "2.0.0",
+        "version": "1.0.0",
         "accounts": accounts_status,
         "total_accounts": len(accounts),
         "logged_in_accounts": logged_in_count,
