@@ -513,7 +513,6 @@ async def init_client():
                 username=os.getenv("MQTT_USERNAME"),
                 password=os.getenv("MQTT_PASSWORD"),
                 client_id_suffix=client_id_suffix,
-                is_beta=config["is_beta"],
             )
             if mqtt_client.connect():
                 logger.info("✓ MQTT Discovery initialized successfully")
