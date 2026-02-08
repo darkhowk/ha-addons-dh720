@@ -516,7 +516,7 @@ async def init_client():
             
             # Determine client ID suffix for beta version
             client_id_suffix = "_beta" if config["is_beta"] else ""
-            logger.info(f"MQTT Client ID suffix: '{client_id_suffix}'" if client_id_suffix else "MQTT Client ID: dhlottery_addon (stable)")
+            logger.info(f"MQTT Client ID suffix: '{client_id_suffix}'" if client_id_suffix else "MQTT Client ID: dhlottery_addon")
             
             mqtt_client = MQTTDiscovery(
                 mqtt_url=os.getenv("MQTT_URL", "mqtt://homeassistant.local:1883"),
