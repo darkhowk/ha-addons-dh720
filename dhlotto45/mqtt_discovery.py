@@ -174,7 +174,7 @@ class MQTTDiscovery:
                 "name": device_name,
                 "manufacturer": "우*만",
                 "model": "토스1000-1261-7813",
-                "sw_version": "26.02.08",
+                "sw_version": "커피 한잔은 사랑입니다",
             },
         }
         
