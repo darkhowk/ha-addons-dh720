@@ -621,6 +621,8 @@ async def update_sensors_for_account(account: AccountData):
             try:
                 history = await account.lotto_645.async_get_buy_history_this_week()
                 
+                # Collect games (max 5)
+                all_games = []
                 if history:
                     latest_purchase = history[0]
                     
@@ -640,8 +642,7 @@ async def update_sensors_for_account(account: AccountData):
                         "icon": "mdi:receipt-text",
                     })
                     
-                    # INDIVIDUAL GAME SENSORS (game_1 ~ game_5)
-                    all_games = []
+                    # Collect all games (max 5)
                     for purchase in reversed(history):
                         for game in purchase.games:
                             all_games.append({
@@ -653,13 +654,20 @@ async def update_sensors_for_account(account: AccountData):
                                 break
                         if len(all_games) >= 5:
                             break
-                    
-                    logger.info(f"[SENSOR][{username}] Publishing {len(all_games)} game sensors")
-                    
-                    latest_round_no = await account.lotto_645.async_get_latest_round_no()
-                    weekly_purchase_count = 0
-                    
-                    for i, game_info in enumerate(all_games, 1):
+                else:
+                    # No purchase history
+                    logger.info(f"[SENSOR][{username}] No purchase history in the last week")
+                
+                logger.info(f"[SENSOR][{username}] Publishing 5 game sensors (filled: {len(all_games)})")
+                
+                latest_round_no = await account.lotto_645.async_get_latest_round_no()
+                weekly_purchase_count = 0
+                
+                # ALWAYS CREATE 5 GAME SENSORS (fixed slots)
+                for i in range(1, 6):
+                    if i <= len(all_games):
+                        # Game exists - fill with data
+                        game_info = all_games[i-1]
                         game = game_info['game']
                         round_no = game_info['round_no']
                         numbers_str = ", ".join(map(str, game.numbers))
@@ -748,32 +756,45 @@ async def update_sensors_for_account(account: AccountData):
                                 "friendly_name": f"게임 {i} 결과",
                                 "icon": "mdi:alert-circle-outline",
                             })
-                    
-                    # Weekly purchase count
-                    weekly_limit = 5
-                    remaining_count = max(0, weekly_limit - weekly_purchase_count)
-                    
-                    await publish_sensor_for_account(account, "lotto45_weekly_purchase_count", weekly_purchase_count, {
-                        "weekly_limit": weekly_limit,
-                        "remaining": remaining_count,
-                        "friendly_name": "주간 구매 횟수",
-                        "unit_of_measurement": "games",
-                        "icon": "mdi:ticket-confirmation" if remaining_count > 0 else "mdi:close-circle",
-                    })
-                    
-                    logger.info(f"[SENSOR][{username}] Weekly: {weekly_purchase_count}/{weekly_limit}")
-                else:
-                    # No purchase history - inform user
-                    logger.info(f"[SENSOR][{username}] No purchase history in the last week")
-                    
-                    # Create placeholder weekly count sensor
-                    await publish_sensor_for_account(account, "lotto45_weekly_purchase_count", 0, {
-                        "weekly_limit": 5,
-                        "remaining": 5,
-                        "friendly_name": "주간 구매 횟수",
-                        "unit_of_measurement": "games",
-                        "icon": "mdi:ticket-confirmation",
-                    })
+                    else:
+                        # Empty slot - create placeholder
+                        await publish_sensor_for_account(account, f"lotto45_game_{i}", "Empty", {
+                            "slot": "-",
+                            "mode": "-",
+                            "numbers": [],
+                            "round_no": 0,
+                            "result": "-",
+                            "friendly_name": f"게임 {i}",
+                            "icon": f"mdi:numeric-{i}-box-outline",
+                        })
+                        
+                        await publish_sensor_for_account(account, f"lotto45_game_{i}_result", "Empty", {
+                            "round_no": 0,
+                            "my_numbers": [],
+                            "winning_numbers": [],
+                            "bonus_number": 0,
+                            "matching_count": 0,
+                            "bonus_match": False,
+                            "rank": 0,
+                            "result": "Empty",
+                            "color": "grey",
+                            "friendly_name": f"게임 {i} 결과",
+                            "icon": "mdi:circle-outline",
+                        })
+                
+                # Weekly purchase count
+                weekly_limit = 5
+                remaining_count = max(0, weekly_limit - weekly_purchase_count)
+                
+                await publish_sensor_for_account(account, "lotto45_weekly_purchase_count", weekly_purchase_count, {
+                    "weekly_limit": weekly_limit,
+                    "remaining": remaining_count,
+                    "friendly_name": "주간 구매 횟수",
+                    "unit_of_measurement": "games",
+                    "icon": "mdi:ticket-confirmation" if remaining_count > 0 else "mdi:close-circle",
+                })
+                
+                logger.info(f"[SENSOR][{username}] Weekly: {weekly_purchase_count}/{weekly_limit}")
                     
             except Exception as e:
                 logger.warning(f"[SENSOR][{username}] Failed purchase history: {e}")
