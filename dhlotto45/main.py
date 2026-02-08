@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-Lotto 45 Add-on Main Application v1.0.0
+Lotto 45 Add-on Main Application v2.0.0
 Home Assistant Add-on for DH Lottery 6/45
-v1.0.0 - Multi-account support with full sensor suite
+v2.0.0 - Multi-account support with full sensor suite
 """
 
 import os
@@ -451,7 +451,7 @@ async def lifespan(app: FastAPI):
     """Lifecycle"""
     global event_loop
     
-    logger.info("Starting v1.0.0 Multi-Account...")
+    logger.info("Starting v2.0.0 Multi-Account...")
     
     event_loop = asyncio.get_running_loop()
     await init_clients()
@@ -474,7 +474,7 @@ async def lifespan(app: FastAPI):
     await cleanup_clients()
 
 
-app = FastAPI(title="Lotto 45 Multi", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="Lotto 45 Multi", version="2.0.0", lifespan=lifespan)
 
 
 async def background_tasks_for_account(account: AccountData):
@@ -830,7 +830,7 @@ async def update_sensors_for_account(account: AccountData):
                 hot_numbers_str = ", ".join(map(str, hot_cold_data.hot_numbers))
                 await publish_sensor_for_account(account, "lotto45_hot_numbers", hot_numbers_str, {
                     "numbers": hot_cold_data.hot_numbers,
-                    "friendly_name": "가장 많이 나온 번호 (최근 20회)",
+                    "friendly_name": "가장 많이 나온 번호 10개 (최근 20회)",
                     "icon": "mdi:fire",
                 })
                 
@@ -838,16 +838,16 @@ async def update_sensors_for_account(account: AccountData):
                 cold_numbers_str = ", ".join(map(str, hot_cold_data.cold_numbers))
                 await publish_sensor_for_account(account, "lotto45_cold_numbers", cold_numbers_str, {
                     "numbers": hot_cold_data.cold_numbers,
-                    "friendly_name": "가장 적게 나온 번호 (최근 20회)",
+                    "friendly_name": "가장 적게 나온 번호 10개 (최근 20회)",
                     "icon": "mdi:snowflake",
                 })
                 
                 # Most frequent numbers sensor
-                top_freq_str = ", ".join([f"{nf.number}({nf.count})" for nf in hot_cold_data.most_frequent[:5]])
+                top_freq_str = "최근 50회차: " + ", ".join([f"{nf.number}번({nf.count}번 출현)" for nf in hot_cold_data.most_frequent[:5]])
                 await publish_sensor_for_account(account, "lotto45_most_frequent_numbers", top_freq_str, {
                     "top_5": [{"number": nf.number, "count": nf.count, "percentage": nf.percentage} 
                              for nf in hot_cold_data.most_frequent[:5]],
-                    "friendly_name": "최다 출현 번호 (전체)",
+                    "friendly_name": "가장 많이 나온 번호 5개 (최근 50회)",
                     "icon": "mdi:chart-bar",
                 })
                 
@@ -990,14 +990,14 @@ async def root():
     <html>
         <head>
             <meta charset="UTF-8">
-            <title>Lotto 45 v1.0.0</title>
+            <title>Lotto 45 v2.0.0</title>
             <style>
                 body {{ font-family: Arial; margin: 40px; }}
                 .info {{ background: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0; }}
             </style>
         </head>
         <body>
-            <h1>🎰 Lotto 45 <span style="color:#666;">v1.0.0 Multi-Account</span></h1>
+            <h1>🎰 Lotto 45 <span style="color:#666;">v2.0.0 Multi-Account</span></h1>
             <div class="info">
                 <h2>Accounts ({len(accounts)})</h2>
                 {accounts_html}
@@ -1030,7 +1030,7 @@ async def health():
     
     return {
         "status": "ok" if logged_in_count > 0 else "degraded",
-        "version": "1.0.0",
+        "version": "2.0.0",
         "accounts": accounts_status,
         "total_accounts": len(accounts),
         "logged_in_accounts": logged_in_count,
