@@ -1,0 +1,65 @@
+{
+  "name": "연금복권 720+ (DH Lottery Pension 720+)",
+  "version": "1.0.0",
+  "slug": "dhyeongeum720",
+  "description": "DH Lottery Pension 720+ Add-on with MQTT Discovery - Multi-Account Support",
+  "url": "https://github.com/darkhowk/ha-addons-dhlottery",
+  "arch": ["amd64", "armv7", "aarch64"],
+  "build_from": {
+    "amd64": "ghcr.io/home-assistant/amd64-base:latest",
+    "aarch64": "ghcr.io/home-assistant/aarch64-base:latest",
+    "armv7": "ghcr.io/home-assistant/armv7-base:latest"
+  },
+  "startup": "services",
+  "boot": "auto",
+  "init": false,
+  "options": {
+    "accounts": [
+      {
+        "username": "",
+        "password": "",
+        "enabled": true
+      }
+    ],
+    "enable_pension720": true,
+    "update_interval": 3600,
+    "use_mqtt": true,
+    "mqtt_url": "mqtt://homeassistant.local:1883",
+    "mqtt_username": "",
+    "mqtt_password": ""
+  },
+  "schema": {
+    "accounts": [
+      {
+        "username": "str",
+        "password": "password",
+        "enabled": "bool?"
+      }
+    ],
+    "enable_pension720": "bool",
+    "update_interval": "int(60,86400)?",
+    "use_mqtt": "bool?",
+    "mqtt_url": "str?",
+    "mqtt_username": "str?",
+    "mqtt_password": "password?"
+  },
+  "ports": {
+    "60100/tcp": 60100
+  },
+  "ports_description": {
+    "60100/tcp": "Web UI and API"
+  },
+  "homeassistant_api": true,
+  "hassio_api": true,
+  "hassio_role": "default",
+  "auth_api": true,
+  "ingress": true,
+  "ingress_port": 60100,
+  "ingress_stream": false,
+  "panel_icon": "mdi:receipt",
+  "panel_title": "연금복권 720+",
+  "host_network": false,
+  "privileged": [],
+  "full_access": false,
+  "apparmor": true
+}
