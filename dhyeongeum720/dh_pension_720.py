@@ -139,11 +139,23 @@ class DhPension720:
         if self._jsessionid:
             return
 
-        # game.jsp 방문 → el 서브도메인 JSESSIONID 생성
-        await self.client.session.get(
+        # 1차: game.jsp 방문
+        resp = await self.client.session.get(
             f"{EL_BASE_URL}/game/pension720/game.jsp"
         )
+        _LOGGER.info(
+            f"[PENSION720] game.jsp status={resp.status}, "
+            f"url={resp.url}"
+        )
 
+        # 쿠키 전체 디버깅
+        for cookie in self.client.session.cookie_jar:
+            _LOGGER.debug(
+                f"[PENSION720] cookie: {cookie.key}={cookie.value[:16]}... "
+                f"domain={cookie.get('domain', '?')}"
+            )
+
+        # filter_cookies로 먼저 시도
         cookies = self.client.session.cookie_jar.filter_cookies(
             URL(EL_BASE_URL)
         )
@@ -151,7 +163,38 @@ class DhPension720:
         if morsel:
             self._jsessionid = morsel.value
 
+        # 못 찾으면 전체 쿠키에서 JSESSIONID 탐색
         if not self._jsessionid:
+            for cookie in self.client.session.cookie_jar:
+                if cookie.key == "JSESSIONID":
+                    domain = cookie.get("domain", "")
+                    _LOGGER.info(
+                        f"[PENSION720] found JSESSIONID on domain={domain}"
+                    )
+                    self._jsessionid = cookie.value
+                    break
+
+        # 2차: 메인 페이지 시도
+        if not self._jsessionid:
+            _LOGGER.info("[PENSION720] game.jsp 실패, 메인 페이지 시도")
+            resp2 = await self.client.session.get(EL_BASE_URL)
+            _LOGGER.info(
+                f"[PENSION720] main status={resp2.status}, url={resp2.url}"
+            )
+            for cookie in self.client.session.cookie_jar:
+                if cookie.key == "JSESSIONID":
+                    self._jsessionid = cookie.value
+                    break
+
+        if not self._jsessionid:
+            # 모든 쿠키 목록 로깅
+            all_cookies = [
+                f"{c.key}(domain={c.get('domain', '?')})"
+                for c in self.client.session.cookie_jar
+            ]
+            _LOGGER.error(
+                f"[PENSION720] JSESSIONID 없음. 전체 쿠키: {all_cookies}"
+            )
             raise DhPension720Error("JSESSIONID를 가져올 수 없습니다")
 
         _LOGGER.info(f"[PENSION720] JSESSIONID: {self._jsessionid[:8]}...")
