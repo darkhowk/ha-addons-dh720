@@ -52,6 +52,7 @@ class DhLotteryClient:
         
         self.session = aiohttp.ClientSession(
             connector=aiohttp.TCPConnector(ssl=False),
+            cookie_jar=aiohttp.CookieJar(unsafe=True),
             headers={
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
                 "Chrome/143.0.0.0 Safari/537.36",
