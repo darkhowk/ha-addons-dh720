@@ -274,14 +274,22 @@ class DhPension720:
                 except Exception:
                     pass
 
-        # 1차 시도
+        # 1차 시도 (로또45처럼: 먼저 mainMode=N 세션 확보 후 EL 접근)
+        try:
+            await self.client._async_ensure_main_mode_normal()
+        except Exception:
+            pass
         await _attempt_fetch_jsessionid(tag="")
 
-        # 2차 시도: 로또45 애드온 방식처럼 세션 리셋 + 재로그인 후 재시도
+        # 2차 시도: 로또45 애드온 방식처럼 세션 리셋 + 재로그인(+ mainMode=N) 후 재시도
         if not self._jsessionid:
             _LOGGER.warning("[PENSION720] JSESSIONID 1차 획득 실패 → 세션 리셋/재로그인 후 재시도")
             try:
                 await self.client.async_reset_session_and_login()
+                try:
+                    await self.client._async_ensure_main_mode_normal()
+                except Exception:
+                    pass
             except Exception as e:
                 _LOGGER.warning(f"[PENSION720] 세션 리셋/재로그인 실패(계속 진행): {e}")
 

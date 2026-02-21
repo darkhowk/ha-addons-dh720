@@ -11,6 +11,9 @@ from dh_rsa import RSAKey
 _LOGGER = logging.getLogger(__name__)
 
 DH_LOTTERY_URL = "https://www.dhlottery.co.kr"
+# mainMode=N: 정상 페이지 (API/구매 정상 동작), mainMode=Y: 간소화 페이지 (임시 운영, API 호환성 이슈)
+DH_MAIN_PAGE_NORMAL = f"{DH_LOTTERY_URL}/main"
+DH_MAIN_PARAMS_NORMAL = {"mainMode": "N"}
 
 @dataclass
 class DhLotteryBalanceData:
@@ -193,6 +196,11 @@ class DhLotteryClient:
             if resp.status == 200 and 'loginSuccess.do' in final_url:
                 self.logged_in = True
                 _LOGGER.info("Login successful!")
+                # 로또45 애드온처럼 정상 페이지(mainMode=N) 세션을 한 번 확보
+                try:
+                    await self._async_ensure_main_mode_normal()
+                except Exception as e:
+                    _LOGGER.debug(f"Ensure mainMode=N skipped/failed: {e}")
                 return
             
             # failed 처리
@@ -218,6 +226,26 @@ class DhLotteryClient:
             self.logged_in = False
             _LOGGER.exception("Login exception occurred")
             raise DhLotteryError(f"[ERROR] Login execute failed: {ex}") from ex
+
+    async def _async_ensure_main_mode_normal(self) -> bool:
+        """정상 페이지(mainMode=N) 세션 확보.
+
+        동행복권이 간헐적으로 간소화 페이지(mainMode=Y)로 리다이렉트하면
+        일부 API/세션 흐름이 꼬일 수 있어, 로또45 애드온과 동일하게
+        mainMode=N을 한번 찍어 세션/쿠키를 안정화합니다.
+        """
+        if not self.session or self.session.closed:
+            self._create_session()
+        try:
+            resp = await self.session.get(
+                DH_MAIN_PAGE_NORMAL,
+                params=DH_MAIN_PARAMS_NORMAL,
+                allow_redirects=True,
+            )
+            return resp.status in (200, 302)
+        except Exception as ex:
+            _LOGGER.debug(f"Failed to ensure main mode normal: {ex}")
+            return False
 
     async def _async_set_select_rsa_module(self) -> None:
         """RSA 모듈 설정합니다. API 우선, failed 시 Login page서 파싱"""
