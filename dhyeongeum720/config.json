@@ -1,6 +1,6 @@
 {
   "name": "연금복권 720+ (DH Lottery Pension 720+)",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "slug": "dhyeongeum720",
   "description": "DH Lottery Pension 720+ Add-on with MQTT Discovery - Multi-Account Support",
   "url": "https://github.com/darkhowk/ha-addons-dh720",

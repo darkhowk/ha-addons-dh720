@@ -208,64 +208,84 @@ class DhPension720:
                 except Exception:
                     continue
 
-        # (A) 먼저 EL 루트 1회 방문해서 기본 세션 생성 시도
-        try:
-            async with self.client.session.get(
-                f"{EL_BASE_URL}/",
-                allow_redirects=True,
-                headers={
-                    "Origin": EL_BASE_URL,
-                    "Referer": f"{EL_BASE_URL}/",
-                },
-            ) as resp0:
-                # ensure response is consumed so aiohttp processes cookies reliably
+        async def _attempt_fetch_jsessionid(tag: str = ""):
+            # (A) EL 루트 방문
+            try:
+                async with self.client.session.get(
+                    f"{EL_BASE_URL}/",
+                    allow_redirects=True,
+                    headers={
+                        "Origin": EL_BASE_URL,
+                        "Referer": f"{EL_BASE_URL}/",
+                    },
+                ) as resp0:
+                    try:
+                        await resp0.text()
+                    except Exception:
+                        pass
+
+                    _LOGGER.info(
+                        f"[PENSION720]{tag} el root status={resp0.status}, url={resp0.url}"
+                    )
+                    self._jsessionid = await _pick_jsessionid_from_response(resp0)
+            except Exception as e:
+                _LOGGER.warning(f"[PENSION720]{tag} el root visit failed (ignored): {e}")
+
+            # (B) game.jsp 방문 (핵심)
+            if not self._jsessionid:
                 try:
-                    await resp0.text()
+                    async with self.client.session.get(
+                        f"{EL_BASE_URL}/game/pension720/game.jsp",
+                        allow_redirects=True,
+                        headers={
+                            "Origin": EL_BASE_URL,
+                            "Referer": f"{EL_BASE_URL}/game/pension720/game.jsp",
+                        },
+                    ) as resp:
+                        try:
+                            await resp.text()
+                        except Exception:
+                            pass
+
+                        _LOGGER.info(
+                            f"[PENSION720]{tag} game.jsp status={resp.status}, url={resp.url}"
+                        )
+                        self._jsessionid = await _pick_jsessionid_from_response(resp)
+                except Exception as e:
+                    _LOGGER.warning(f"[PENSION720]{tag} game.jsp visit failed (ignored): {e}")
+
+            # (C) cookie_jar에서 재시도
+            if not self._jsessionid:
+                try:
+                    cookies = self.client.session.cookie_jar.filter_cookies(URL(EL_BASE_URL))
+                    morsel = cookies.get("JSESSIONID")
+                    if morsel:
+                        self._jsessionid = morsel.value
                 except Exception:
                     pass
 
-                _LOGGER.info(
-                    f"[PENSION720] el root status={resp0.status}, url={resp0.url}"
-                )
-                self._jsessionid = await _pick_jsessionid_from_response(resp0)
-        except Exception as e:
-            _LOGGER.warning(f"[PENSION720] el root visit failed (ignored): {e}")
-
-        # (B) game.jsp 방문 (핵심)
-        if not self._jsessionid:
-            async with self.client.session.get(
-                f"{EL_BASE_URL}/game/pension720/game.jsp",
-                allow_redirects=True,
-                headers={
-                    "Origin": EL_BASE_URL,
-                    "Referer": f"{EL_BASE_URL}/game/pension720/game.jsp",
-                },
-            ) as resp:
+            # (D) 전체 cookie_jar 탐색
+            if not self._jsessionid:
                 try:
-                    await resp.text()
+                    for cookie in self.client.session.cookie_jar:
+                        if cookie.key.upper().startswith("JSESSIONID"):
+                            self._jsessionid = cookie.value
+                            break
                 except Exception:
                     pass
 
-                _LOGGER.info(
-                    f"[PENSION720] game.jsp status={resp.status}, url={resp.url}"
-                )
+        # 1차 시도
+        await _attempt_fetch_jsessionid(tag="")
 
-                # 응답/히스토리/Set-Cookie에서 직접 추출
-                self._jsessionid = await _pick_jsessionid_from_response(resp)
-
-        # (C) cookie_jar에서 재시도
+        # 2차 시도: 로또45 애드온 방식처럼 세션 리셋 + 재로그인 후 재시도
         if not self._jsessionid:
-            cookies = self.client.session.cookie_jar.filter_cookies(URL(EL_BASE_URL))
-            morsel = cookies.get("JSESSIONID")
-            if morsel:
-                self._jsessionid = morsel.value
+            _LOGGER.warning("[PENSION720] JSESSIONID 1차 획득 실패 → 세션 리셋/재로그인 후 재시도")
+            try:
+                await self.client.async_reset_session_and_login()
+            except Exception as e:
+                _LOGGER.warning(f"[PENSION720] 세션 리셋/재로그인 실패(계속 진행): {e}")
 
-        # (D) 마지막으로 전체 cookie_jar를 훑어서 JSESSIONID 찾기
-        if not self._jsessionid:
-            for cookie in self.client.session.cookie_jar:
-                if cookie.key == "JSESSIONID":
-                    self._jsessionid = cookie.value
-                    break
+            await _attempt_fetch_jsessionid(tag="[retry]")
 
         if not self._jsessionid:
             await _log_cookiejar(prefix="")

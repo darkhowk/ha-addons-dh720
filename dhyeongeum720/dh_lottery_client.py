@@ -78,11 +78,24 @@ class DhLotteryClient:
         )
 
     async def close(self):
-        """세션 ended합니다."""
+        """세션 종료합니다."""
         if self.session and not self.session.closed:
             await self.session.close()
-            self.session = None
-            self.logged_in = False
+        self.session = None
+        self.logged_in = False
+
+    async def async_reset_session_and_login(self):
+        """세션을 완전히 재생성하고 다시 로그인합니다.
+
+        el.dhlottery.co.kr 쪽 JSESSIONID가 안 잡히는 경우,
+        기존 세션/쿠키 상태가 꼬였을 수 있어 강제 리셋이 필요합니다.
+        """
+        try:
+            await self.close()
+        except Exception:
+            pass
+        self._create_session()
+        await self.async_login()
 
     @staticmethod
     async def handle_response_json(response: aiohttp.ClientResponse) -> dict[str, Any]:
