@@ -259,14 +259,20 @@ async def update_account_sensors(account: AccountData):
         return
 
     try:
-        if config["enable_pension720"] and account.pension_720:
-            balance = await account.pension_720.async_get_balance()
-            await publish_sensor_for_account(account, "pension720_balance", balance.purchase_available, {
+        # NOTE: el.dhlottery.co.kr 쪽이 JSESSIONID를 더 이상 발급하지 않는/차단되는 케이스가 있어
+        # 연금720 잔액 센서는 www.dhlottery.co.kr의 마이페이지 API(로그인 기반)로 대체합니다.
+        # (로또45 애드온과 동일한 방식)
+        if config["enable_pension720"]:
+            bal = await account.client.async_get_balance()
+            purchase_available = bal.purchase_available
+            deposit = bal.deposit
+            await publish_sensor_for_account(account, "pension720_balance", purchase_available, {
                 "friendly_name": "잔액",
                 "icon": "mdi:wallet",
                 "unit_of_measurement": "원",
-                "deposit": balance.deposit,
-                "purchase_available": balance.purchase_available,
+                "deposit": deposit,
+                "purchase_available": purchase_available,
+                "source": "www_api",
             })
 
     except DhLotteryError as e:
@@ -465,8 +471,10 @@ async def purchase_1(username: str):
     if not account.enabled:
         raise HTTPException(status_code=400, detail="Account is disabled")
 
-    if not account.pension_720:
-        raise HTTPException(status_code=400, detail="Pension 720+ not enabled")
+    # 구매는 el.dhlottery.co.kr 쪽 암호화 세션(JSESSIONID 기반)이 필요한데,
+    # 현재 JSESSIONID 미발급/차단 케이스가 있어 "세션 안쓰는 방식"으로는 구매를 지원할 수 없습니다.
+    # (잔액/이력은 www API로 제공 가능)
+    raise HTTPException(status_code=501, detail="Purchase disabled: EL session required")
 
     # 중복 실행 방지 (10초 내에 같은 버튼 재클릭 방지)
     key = (username, "buy_1")
@@ -513,8 +521,10 @@ async def purchase_5(username: str):
     if not account.enabled:
         raise HTTPException(status_code=400, detail="Account is disabled")
 
-    if not account.pension_720:
-        raise HTTPException(status_code=400, detail="Pension 720+ not enabled")
+    # 구매는 el.dhlottery.co.kr 쪽 암호화 세션(JSESSIONID 기반)이 필요한데,
+    # 현재 JSESSIONID 미발급/차단 케이스가 있어 "세션 안쓰는 방식"으로는 구매를 지원할 수 없습니다.
+    # (잔액/이력은 www API로 제공 가능)
+    raise HTTPException(status_code=501, detail="Purchase disabled: EL session required")
 
     # 중복 실행 방지 (10초 내에 같은 버튼 재클릭 방지)
     key = (username, "buy_5")
@@ -561,14 +571,15 @@ async def get_balance(username: str):
     if not account.enabled:
         raise HTTPException(status_code=400, detail="Account is disabled")
 
-    if not account.pension_720:
-        raise HTTPException(status_code=400, detail="Pension 720+ not enabled")
+    if not account.client or not account.client.logged_in:
+        raise HTTPException(status_code=400, detail="Not logged in")
 
     try:
-        balance = await account.pension_720.async_get_balance()
+        bal = await account.client.async_get_balance()
         return {
-            "deposit": balance.deposit,
-            "purchase_available": balance.purchase_available,
+            "deposit": bal.deposit,
+            "purchase_available": bal.purchase_available,
+            "source": "www_api",
         }
 
     except Exception as e:
@@ -591,23 +602,25 @@ async def get_history(username: str):
     if not account.enabled:
         raise HTTPException(status_code=400, detail="Account is disabled")
 
-    if not account.pension_720:
-        raise HTTPException(status_code=400, detail="Pension 720+ not enabled")
+    if not account.client or not account.client.logged_in:
+        raise HTTPException(status_code=400, detail="Not logged in")
 
+    # 구매이력은 www API를 사용 (로또45와 동일한 방식)
     try:
-        history = await account.pension_720.async_get_buy_history()
+        items = await account.client.async_get_buy_list("P720")
         return {
+            "source": "www_api",
             "history": [
                 {
-                    "round_no": h.round_no,
-                    "issue_dt": h.issue_dt,
-                    "barcode": h.barcode,
-                    "ticket_count": h.ticket_count,
-                    "amount": h.amount,
-                    "result": h.result
+                    "round_no": item.get("round", 0),
+                    "issue_dt": item.get("issueDt", ""),
+                    "barcode": item.get("barcode", ""),
+                    "ticket_count": item.get("ticketCount", 0),
+                    "amount": item.get("amount", 0),
+                    "result": item.get("result", "미추첨"),
                 }
-                for h in history
-            ]
+                for item in (items or [])
+            ],
         }
 
     except Exception as e:
