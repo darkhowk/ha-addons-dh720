@@ -296,8 +296,21 @@ class DhPension720:
             await _attempt_fetch_jsessionid(tag="[retry]")
 
         if not self._jsessionid:
-            # 마지막 fallback: el 도메인에서 JSESSIONID 대신 WMONID만 내려오는 케이스가 있음
-            # (운영/보안 정책 변경으로 cookie명이 바뀌는 경우 대응)
+            # fallback 1: 로또(=www)처럼 DHJSESSIONID를 세션키로 사용 시도
+            # (EL이 JSESSIONID를 발급하지 않는 환경에서 우회 가능성)
+            try:
+                cookies_www = self.client.session.cookie_jar.filter_cookies(URL("https://www.dhlottery.co.kr"))
+                dhjs = cookies_www.get("DHJSESSIONID")
+                if dhjs and getattr(dhjs, "value", None):
+                    self._jsessionid = dhjs.value
+                    _LOGGER.warning(
+                        "[PENSION720] EL JSESSIONID 미발급 → DHJSESSIONID를 세션키로 사용합니다."
+                    )
+            except Exception:
+                pass
+
+        if not self._jsessionid:
+            # fallback 2: el 도메인에서 JSESSIONID 대신 WMONID만 내려오는 케이스가 있음
             try:
                 cookies_el = self.client.session.cookie_jar.filter_cookies(URL(EL_BASE_URL))
                 wmon = cookies_el.get("WMONID")

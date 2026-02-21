@@ -471,10 +471,8 @@ async def purchase_1(username: str):
     if not account.enabled:
         raise HTTPException(status_code=400, detail="Account is disabled")
 
-    # 구매는 el.dhlottery.co.kr 쪽 암호화 세션(JSESSIONID 기반)이 필요한데,
-    # 현재 JSESSIONID 미발급/차단 케이스가 있어 "세션 안쓰는 방식"으로는 구매를 지원할 수 없습니다.
-    # (잔액/이력은 www API로 제공 가능)
-    raise HTTPException(status_code=501, detail="Purchase disabled: EL session required")
+    if not account.pension_720:
+        raise HTTPException(status_code=400, detail="Pension 720+ not enabled")
 
     # 중복 실행 방지 (10초 내에 같은 버튼 재클릭 방지)
     key = (username, "buy_1")
@@ -521,10 +519,8 @@ async def purchase_5(username: str):
     if not account.enabled:
         raise HTTPException(status_code=400, detail="Account is disabled")
 
-    # 구매는 el.dhlottery.co.kr 쪽 암호화 세션(JSESSIONID 기반)이 필요한데,
-    # 현재 JSESSIONID 미발급/차단 케이스가 있어 "세션 안쓰는 방식"으로는 구매를 지원할 수 없습니다.
-    # (잔액/이력은 www API로 제공 가능)
-    raise HTTPException(status_code=501, detail="Purchase disabled: EL session required")
+    if not account.pension_720:
+        raise HTTPException(status_code=400, detail="Pension 720+ not enabled")
 
     # 중복 실행 방지 (10초 내에 같은 버튼 재클릭 방지)
     key = (username, "buy_5")
