@@ -146,18 +146,53 @@ class DhPension720:
             return
 
         async def _pick_jsessionid_from_response(resp) -> Optional[str]:
+            """Try multiple sources:
+            - resp.cookies
+            - resp.history cookies
+            - raw Set-Cookie headers (covers cases where cookie jar doesn't store)
+            """
             # 1) 현재 응답 쿠키
             try:
-                if resp.cookies and "JSESSIONID" in resp.cookies:
-                    return resp.cookies["JSESSIONID"].value
+                if resp.cookies:
+                    # accept any cookie key that starts with JSESSIONID
+                    for k, v in resp.cookies.items():
+                        if k.upper().startswith("JSESSIONID"):
+                            return v.value
             except Exception:
                 pass
 
             # 2) redirect 히스토리 쿠키
             try:
                 for h in (resp.history or []):
-                    if h.cookies and "JSESSIONID" in h.cookies:
-                        return h.cookies["JSESSIONID"].value
+                    if not h.cookies:
+                        continue
+                    for k, v in h.cookies.items():
+                        if k.upper().startswith("JSESSIONID"):
+                            return v.value
+            except Exception:
+                pass
+
+            # 3) raw Set-Cookie headers
+            try:
+                hdrs = []
+                try:
+                    hdrs = resp.headers.getall("Set-Cookie", [])
+                except Exception:
+                    v = resp.headers.get("Set-Cookie")
+                    if v:
+                        hdrs = [v]
+
+                for line in hdrs:
+                    # e.g. "JSESSIONID=....; Path=/; Secure; HttpOnly"
+                    parts = [p.strip() for p in line.split(";") if p.strip()]
+                    if not parts:
+                        continue
+                    kv = parts[0]
+                    if "=" not in kv:
+                        continue
+                    name, val = kv.split("=", 1)
+                    if name.upper().startswith("JSESSIONID") and val:
+                        return val
             except Exception:
                 pass
 
@@ -175,37 +210,48 @@ class DhPension720:
 
         # (A) 먼저 EL 루트 1회 방문해서 기본 세션 생성 시도
         try:
-            resp0 = await self.client.session.get(
+            async with self.client.session.get(
                 f"{EL_BASE_URL}/",
                 allow_redirects=True,
                 headers={
                     "Origin": EL_BASE_URL,
                     "Referer": f"{EL_BASE_URL}/",
                 },
-            )
-            _LOGGER.info(
-                f"[PENSION720] el root status={resp0.status}, url={resp0.url}"
-            )
-            self._jsessionid = await _pick_jsessionid_from_response(resp0)
+            ) as resp0:
+                # ensure response is consumed so aiohttp processes cookies reliably
+                try:
+                    await resp0.text()
+                except Exception:
+                    pass
+
+                _LOGGER.info(
+                    f"[PENSION720] el root status={resp0.status}, url={resp0.url}"
+                )
+                self._jsessionid = await _pick_jsessionid_from_response(resp0)
         except Exception as e:
             _LOGGER.warning(f"[PENSION720] el root visit failed (ignored): {e}")
 
         # (B) game.jsp 방문 (핵심)
         if not self._jsessionid:
-            resp = await self.client.session.get(
+            async with self.client.session.get(
                 f"{EL_BASE_URL}/game/pension720/game.jsp",
                 allow_redirects=True,
                 headers={
                     "Origin": EL_BASE_URL,
                     "Referer": f"{EL_BASE_URL}/game/pension720/game.jsp",
                 },
-            )
-            _LOGGER.info(
-                f"[PENSION720] game.jsp status={resp.status}, url={resp.url}"
-            )
+            ) as resp:
+                try:
+                    await resp.text()
+                except Exception:
+                    pass
 
-            # 응답/히스토리에서 직접 추출
-            self._jsessionid = await _pick_jsessionid_from_response(resp)
+                _LOGGER.info(
+                    f"[PENSION720] game.jsp status={resp.status}, url={resp.url}"
+                )
+
+                # 응답/히스토리/Set-Cookie에서 직접 추출
+                self._jsessionid = await _pick_jsessionid_from_response(resp)
 
         # (C) cookie_jar에서 재시도
         if not self._jsessionid:
