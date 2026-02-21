@@ -296,6 +296,21 @@ class DhPension720:
             await _attempt_fetch_jsessionid(tag="[retry]")
 
         if not self._jsessionid:
+            # 마지막 fallback: el 도메인에서 JSESSIONID 대신 WMONID만 내려오는 케이스가 있음
+            # (운영/보안 정책 변경으로 cookie명이 바뀌는 경우 대응)
+            try:
+                cookies_el = self.client.session.cookie_jar.filter_cookies(URL(EL_BASE_URL))
+                wmon = cookies_el.get("WMONID")
+                if wmon and getattr(wmon, "value", None):
+                    self._jsessionid = wmon.value
+                    _LOGGER.warning(
+                        "[PENSION720] JSESSIONID 쿠키가 없어 WMONID를 세션키로 사용합니다. "
+                        "(서버 정책 변경 가능성)"
+                    )
+            except Exception:
+                pass
+
+        if not self._jsessionid:
             await _log_cookiejar(prefix="")
             all_cookies = [
                 f"{c.key}(domain={c.get('domain', '?')},path={c.get('path','?')})"
