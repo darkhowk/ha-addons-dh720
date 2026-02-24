@@ -34,12 +34,6 @@ COPY run.sh /
 # 실행 권한
 RUN chmod a+x /run.sh
 
-# 헬스체크 (선택사항)
-# HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-#     CMD wget --no-verbose --tries=1 --spider http://localhost:60099/health || exit 1
+EXPOSE 60100
 
-# 포트 노출
-EXPOSE 60099
-
-# 실행
 CMD ["/run.sh"]
